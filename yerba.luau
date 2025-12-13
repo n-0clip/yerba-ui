@@ -1,1 +1,1 @@
--- ayo its will be soon but herre the scrn
+-- check readme
