@@ -1,5 +1,5 @@
 # yerba
-yerba ui library (soon)
+yerba ui library (its only creating gui no scripts)
 
 # image
 <img width="1483" height="684" alt="image" src="https://github.com/user-attachments/assets/0fbe9699-46a3-4606-a203-781bbdf34995" />
