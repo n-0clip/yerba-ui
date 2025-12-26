@@ -1,10 +1,10 @@
 --[[
     		yerba interface
 
-    Author: n-0clip
-    License: MIT
-    Original: yerba external
+    creator: n-0clip
+    original: yerba external
 
-        Version: 1.3
+        ver: 1.3
     - The ui library
+
 --]]
