@@ -6,6 +6,7 @@
 
         ver: 1.3
     - The ui library
+	- added example idk
 
 --]]
 
@@ -165,7 +166,7 @@ function Yerba:CreateWindow(title, subtitle)
 	end
 
 	local ScreenGui = Create("ScreenGui", {
-		Name = "YerbaUI",
+		Name = "Core",
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		ResetOnSpawn = false,
 		Parent = LocalPlayer:WaitForChild("PlayerGui")
@@ -2283,9 +2284,6 @@ task.spawn(function()
 end)
 
 print("Aimbot keybind mode:", AimbotToggle:GetMode())
-
-Watermark:SetTitle("Yerba")
-Watermark:SetSubtitle("with<3")
 
 InfoLabel:Set("Status: Active")
 
