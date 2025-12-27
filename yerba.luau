@@ -10,15 +10,36 @@
 
 --]]
 
-local Yerba = {}
+local Yerba = {
+	Version = '1.3',
+	Logo = "rbxassetid://74807357385705",
+	Windows = {},
+	Scale = {
+		Window = UDim2.new(0, 620, 0, 480),
+		Mobile = UDim2.new(0, 450, 0, 375),
+		TabOpen = 185,
+		TabClose = 85,
+		TopBar = 50,
+		SectionWidth = 290,
+		SectionGap = 10,
+		ContentPadding = 12,
+	},
+	PerformanceMode = false,
+	WindowsNil = {},
+	NilFolder = Instance.new('Folder'),
+	ProtectGui = protect_gui or protectgui or (syn and syn.protect_gui) or function(s) return s end,
+}
+
 Yerba.__index = Yerba
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
+local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
+local CurrentCamera = workspace.CurrentCamera
 
 local Fonts = {
 	ComicNeue = Font.new("rbxasset://fonts/families/ComicNeueAngular.json", Enum.FontWeight.Regular, Enum.FontStyle.Normal),
@@ -32,7 +53,8 @@ local Theme = {
 	Tertiary = Color3.fromRGB(24, 24, 24),
 	TopBar = Color3.fromRGB(32, 32, 32),
 	Accent = Color3.fromRGB(82, 106, 117),
-	AccentDark = Color3.fromRGB(65, 84, 93),
+	AccentDark = Color3.fromRGB(42, 55, 61),
+	AccentMid = Color3.fromRGB(81, 105, 116),
 	AccentBlue = Color3.fromRGB(7, 101, 160),
 	Border = Color3.fromRGB(43, 43, 43),
 	BorderAccent = Color3.fromRGB(17, 41, 71),
@@ -45,7 +67,8 @@ local Theme = {
 	Blue = Color3.fromRGB(67, 144, 186),
 	Enabled = Color3.fromRGB(67, 144, 186),
 	Disabled = Color3.fromRGB(24, 24, 24),
-	Hover = Color3.fromRGB(35, 35, 35)
+	Hover = Color3.fromRGB(35, 35, 35),
+	DotPattern = Color3.fromRGB(20, 23, 21)
 }
 
 local function Create(instanceType, properties, children)
@@ -105,7 +128,7 @@ local function AddGradientLine(parent, position, size)
 	Create("UIGradient", {
 		Color = ColorSequence.new{
 			ColorSequenceKeypoint.new(0, Theme.AccentDark),
-			ColorSequenceKeypoint.new(0.5, Theme.Accent),
+			ColorSequenceKeypoint.new(0.5, Theme.AccentMid),
 			ColorSequenceKeypoint.new(1, Theme.AccentDark)
 		},
 		Parent = line
@@ -113,22 +136,69 @@ local function AddGradientLine(parent, position, size)
 	return line
 end
 
-function Yerba:CreateWindow(title, subtitle)
+local function AddSlash(parent, x, zindex)
+	return Create("TextLabel", {
+		Name = "Slash",
+		BackgroundTransparency = 1,
+		FontFace = Fonts.ComicNeue,
+		Text = "|",
+		TextColor3 = Theme.AccentDark,
+		TextSize = 21,
+		Size = UDim2.new(0, 10, 1, 0),
+		Position = UDim2.new(0, x - 5, 0, 0),
+		ZIndex = zindex or 2,
+		Parent = parent
+	})
+end
+
+local function AddDotPattern(parent)
+	if Yerba.PerformanceMode then return end
+
+	local DotContainer = Create("Frame", {
+		Name = "DotPattern",
+		BackgroundTransparency = 1,
+		Size = UDim2.new(1, 0, 1, 0),
+		ZIndex = 0,
+		Parent = parent
+	})
+
+	local dotSize = 2
+	local spacing = 15
+
+	for x = 0, parent.AbsoluteSize.X, spacing do
+		for y = 0, parent.AbsoluteSize.Y, spacing do
+			Create("Frame", {
+				BackgroundColor3 = Theme.DotPattern,
+				BorderSizePixel = 0,
+				Size = UDim2.new(0, dotSize, 0, dotSize),
+				Position = UDim2.new(0, x, 0, y),
+				ZIndex = 0,
+				Parent = DotContainer
+			})
+		end
+	end
+
+	return DotContainer
+end
+
+function Yerba:CreateWindow(title, subtitle, options)
+	options = options or {}
+
 	local Window = {}
 	Window.Tabs = {}
 	Window.ActiveTab = nil
 	Window.OpenDropdowns = {}
 	Window.OpenColorPickers = {}
-	Window.OpenPlusMenus = {}
+	Window.OpenSideMenus = {}
 	Window.OpenKeybindMenus = {}
 	Window.Visible = true
 
-	local WINDOW_WIDTH = 620
-	local WINDOW_HEIGHT = 480
-	local TOPBAR_HEIGHT = 50
-	local SECTION_WIDTH = 290
-	local SECTION_GAP = 10
-	local CONTENT_PADDING = 12
+	local WINDOW_WIDTH = options.Width or Yerba.Scale.Window.X.Offset
+	local WINDOW_HEIGHT = options.Height or Yerba.Scale.Window.Y.Offset
+	local TOPBAR_HEIGHT = Yerba.Scale.TopBar
+	local SECTION_WIDTH = Yerba.Scale.SectionWidth
+	local SECTION_GAP = Yerba.Scale.SectionGap
+	local CONTENT_PADDING = Yerba.Scale.ContentPadding
 
 	local function CloseAllDropdowns()
 		for _, dropdown in pairs(Window.OpenDropdowns) do
@@ -144,11 +214,11 @@ function Yerba:CreateWindow(title, subtitle)
 		Window.OpenColorPickers = {}
 	end
 
-	local function CloseAllPlusMenus()
-		for _, menu in pairs(Window.OpenPlusMenus) do
+	local function CloseAllSideMenus()
+		for _, menu in pairs(Window.OpenSideMenus) do
 			if menu.Close then menu.Close() end
 		end
-		Window.OpenPlusMenus = {}
+		Window.OpenSideMenus = {}
 	end
 
 	local function CloseAllKeybindMenus()
@@ -161,16 +231,18 @@ function Yerba:CreateWindow(title, subtitle)
 	local function CloseAllPopups()
 		CloseAllDropdowns()
 		CloseAllColorPickers()
-		CloseAllPlusMenus()
+		CloseAllSideMenus()
 		CloseAllKeybindMenus()
 	end
 
 	local ScreenGui = Create("ScreenGui", {
-		Name = "Core",
+		Name = "YerbaUI",
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		ResetOnSpawn = false,
 		Parent = LocalPlayer:WaitForChild("PlayerGui")
 	})
+
+	Yerba.ProtectGui(ScreenGui)
 
 	local MainWindow = Create("Frame", {
 		Name = "MainWindow",
@@ -185,6 +257,8 @@ function Yerba:CreateWindow(title, subtitle)
 	AddCorner(MainWindow, 6)
 	AddStroke(MainWindow, Theme.BorderAccent)
 
+	AddDotPattern(MainWindow)
+
 	local WindowScale = Create("UIScale", {
 		Name = "Scale",
 		Scale = 1,
@@ -197,6 +271,7 @@ function Yerba:CreateWindow(title, subtitle)
 		BorderSizePixel = 0,
 		ClipsDescendants = true,
 		Size = UDim2.new(1, 0, 0, TOPBAR_HEIGHT),
+		ZIndex = 1,
 		Parent = MainWindow
 	})
 	AddCorner(TopBar, 6)
@@ -205,26 +280,21 @@ function Yerba:CreateWindow(title, subtitle)
 	Create("ImageLabel", {
 		Name = "Icon",
 		BackgroundTransparency = 1,
-		Image = "rbxassetid://74807357385705",
+		Image = Yerba.Logo,
 		Size = UDim2.new(0, 45, 0, 45),
 		Position = UDim2.new(0, 3, 0.5, -22),
+		ZIndex = 2,
 		Parent = TopBar
 	})
 
-	Create("Frame", {
-		Name = "Divider",
-		BackgroundColor3 = Theme.Divider,
-		BorderSizePixel = 0,
-		Size = UDim2.new(0, 1, 0, 30),
-		Position = UDim2.new(0, 52, 0.5, -15),
-		Parent = TopBar
-	})
+	AddSlash(TopBar, 52, 2)
 
 	local TabContainer = Create("Frame", {
 		Name = "Tabs",
 		BackgroundTransparency = 1,
 		Size = UDim2.new(0, 360, 0, 30),
 		Position = UDim2.new(0, 60, 0.5, -15),
+		ZIndex = 2,
 		Parent = TopBar
 	})
 
@@ -242,6 +312,7 @@ function Yerba:CreateWindow(title, subtitle)
 		BorderSizePixel = 0,
 		Size = UDim2.new(0, 50, 0, 2),
 		Position = UDim2.new(0, 60, 0, 40),
+		ZIndex = 3,
 		Parent = TopBar
 	})
 	AddCorner(TabHover, 2)
@@ -249,26 +320,20 @@ function Yerba:CreateWindow(title, subtitle)
 		Rotation = 90,
 		Color = ColorSequence.new{
 			ColorSequenceKeypoint.new(0, Theme.AccentDark),
-			ColorSequenceKeypoint.new(0.5, Theme.Accent),
+			ColorSequenceKeypoint.new(0.5, Theme.AccentMid),
 			ColorSequenceKeypoint.new(1, Theme.AccentDark)
 		},
 		Parent = TabHover
 	})
 
-	Create("Frame", {
-		Name = "Divider",
-		BackgroundColor3 = Theme.Divider,
-		BorderSizePixel = 0,
-		Size = UDim2.new(0, 1, 0, 30),
-		Position = UDim2.new(0, 440, 0.5, -15),
-		Parent = TopBar
-	})
+	AddSlash(TopBar, 440, 2)
 
 	local SearchFrame = Create("Frame", {
 		Name = "Searchbox",
 		BackgroundColor3 = Theme.Tertiary,
 		Size = UDim2.new(0, 150, 0, 26),
 		Position = UDim2.new(0, 455, 0.5, -13),
+		ZIndex = 2,
 		Parent = TopBar
 	})
 	AddCorner(SearchFrame, 5)
@@ -281,6 +346,7 @@ function Yerba:CreateWindow(title, subtitle)
 		Image = "rbxassetid://128625562276776",
 		Size = UDim2.new(0, 16, 0, 16),
 		Position = UDim2.new(0, 6, 0.5, -8),
+		ZIndex = 3,
 		Parent = SearchFrame
 	})
 
@@ -296,6 +362,7 @@ function Yerba:CreateWindow(title, subtitle)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		Size = UDim2.new(1, -30, 1, 0),
 		Position = UDim2.new(0, 26, 0, 0),
+		ZIndex = 3,
 		Parent = SearchFrame
 	})
 
@@ -305,6 +372,7 @@ function Yerba:CreateWindow(title, subtitle)
 		Size = UDim2.new(1, -CONTENT_PADDING*2, 1, -TOPBAR_HEIGHT - CONTENT_PADDING),
 		Position = UDim2.new(0, CONTENT_PADDING, 0, TOPBAR_HEIGHT + CONTENT_PADDING/2),
 		ClipsDescendants = true,
+		ZIndex = 1,
 		Parent = MainWindow
 	})
 
@@ -367,12 +435,12 @@ function Yerba:CreateWindow(title, subtitle)
 		end
 	end
 
-	local function CreatePlusMenu(options)
-		local PlusMenu = {}
-		PlusMenu.Open = false
+	local function CreateSideMenu(options)
+		local SideMenu = {}
+		SideMenu.Open = false
 
 		local MenuFrame = Create("Frame", {
-			Name = "PlusMenu",
+			Name = "SideMenu",
 			BackgroundColor3 = Theme.Secondary,
 			BackgroundTransparency = 0.3,
 			BorderSizePixel = 0,
@@ -401,7 +469,7 @@ function Yerba:CreateWindow(title, subtitle)
 			Name = "TabName",
 			BackgroundTransparency = 1,
 			FontFace = Fonts.Inconsolata,
-			Text = options.Name or "additionals",
+			Text = options.Name or "side menu",
 			TextColor3 = Theme.Text,
 			TextSize = 14,
 			Size = UDim2.new(1, 0, 1, 0),
@@ -438,12 +506,12 @@ function Yerba:CreateWindow(title, subtitle)
 			Parent = MenuContent
 		})
 
-		function PlusMenu.Open_()
-			if PlusMenu.Open then return end
+		function SideMenu.Open_()
+			if SideMenu.Open then return end
 
 			CloseAllPopups()
-			PlusMenu.Open = true
-			table.insert(Window.OpenPlusMenus, PlusMenu)
+			SideMenu.Open = true
+			table.insert(Window.OpenSideMenus, SideMenu)
 
 			local btnPos = options.Button.AbsolutePosition
 			MenuFrame.Position = UDim2.new(0, btnPos.X - 160, 0, btnPos.Y + 20)
@@ -452,18 +520,18 @@ function Yerba:CreateWindow(title, subtitle)
 			Tween(MenuFrame, {Size = UDim2.new(0, 180, 0, 70)}, 0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 		end
 
-		function PlusMenu.Close()
-			if not PlusMenu.Open then return end
-			PlusMenu.Open = false
+		function SideMenu.Close()
+			if not SideMenu.Open then return end
+			SideMenu.Open = false
 			Tween(MenuFrame, {Size = UDim2.new(0, 180, 0, 0)}, 0.15)
 			task.delay(0.15, function()
 				MenuFrame.Visible = false
 			end)
 		end
 
-		PlusMenu.Frame = MenuFrame
+		SideMenu.Frame = MenuFrame
 
-		return PlusMenu
+		return SideMenu
 	end
 
 	function Window:CreateTab(name)
@@ -480,6 +548,7 @@ function Yerba:CreateWindow(title, subtitle)
 			TextSize = 16,
 			AutomaticSize = Enum.AutomaticSize.X,
 			Size = UDim2.new(0, 0, 0, 22),
+			ZIndex = 3,
 			Parent = TabContainer
 		})
 		Create("UIPadding", {
@@ -494,6 +563,7 @@ function Yerba:CreateWindow(title, subtitle)
 			BackgroundTransparency = 1,
 			Size = UDim2.new(1, 0, 1, 0),
 			Visible = #Window.Tabs == 0,
+			ZIndex = 1,
 			Parent = TabPages
 		})
 
@@ -502,6 +572,7 @@ function Yerba:CreateWindow(title, subtitle)
 			BackgroundTransparency = 1,
 			Size = UDim2.new(0, SECTION_WIDTH, 1, 0),
 			Position = UDim2.new(0, 0, 0, 0),
+			ZIndex = 1,
 			Parent = TabPage
 		})
 		Create("UIListLayout", {
@@ -515,6 +586,7 @@ function Yerba:CreateWindow(title, subtitle)
 			BackgroundTransparency = 1,
 			Size = UDim2.new(0, SECTION_WIDTH, 1, 0),
 			Position = UDim2.new(1, -SECTION_WIDTH, 0, 0),
+			ZIndex = 1,
 			Parent = TabPage
 		})
 		Create("UIListLayout", {
@@ -568,6 +640,7 @@ function Yerba:CreateWindow(title, subtitle)
 				ClipsDescendants = true,
 				Size = UDim2.new(1, 0, 0, 120),
 				LayoutOrder = #Tab.Sections,
+				ZIndex = 1,
 				Parent = parentColumn
 			})
 			AddCorner(SectionFrame, 6)
@@ -578,6 +651,7 @@ function Yerba:CreateWindow(title, subtitle)
 				BackgroundColor3 = Theme.TabFrame,
 				BorderSizePixel = 0,
 				Size = UDim2.new(1, 0, 0, 32),
+				ZIndex = 2,
 				Parent = SectionFrame
 			})
 			AddCorner(Header, 6)
@@ -592,6 +666,7 @@ function Yerba:CreateWindow(title, subtitle)
 				TextXAlignment = Enum.TextXAlignment.Left,
 				Size = UDim2.new(0, 70, 1, 0),
 				Position = UDim2.new(0, 8, 0, 0),
+				ZIndex = 3,
 				Parent = Header
 			})
 			AddContextualStroke(TitleLabel)
@@ -606,11 +681,13 @@ function Yerba:CreateWindow(title, subtitle)
 					Size = UDim2.new(0, 200, 1, 0),
 					Position = UDim2.new(1, -205, 0, 0),
 					ClipsDescendants = false,
+					ZIndex = 3,
 					Parent = Header
 				})
 
 				local totalWidth = 0
 				local buttonWidths = {}
+				local spacing = 6
 
 				for _, subtabName in ipairs(subtabs) do
 					local textSize = game:GetService("TextService"):GetTextBoundsAsync(
@@ -621,19 +698,17 @@ function Yerba:CreateWindow(title, subtitle)
 							Width = 1000
 						})
 					)
-					local width = textSize.X + 16
+					local width = textSize.X + 12
 					table.insert(buttonWidths, width)
 					totalWidth = totalWidth + width
 				end
 
-				local spacing = 8
 				totalWidth = totalWidth + (spacing * (#subtabs - 1))
 
-				local currentX = 200
-				for i = #subtabs, 1, -1 do
+				local currentX = 200 - totalWidth
+				for i = 1, #subtabs do
 					local subtabName = subtabs[i]
 					local width = buttonWidths[i]
-					currentX = currentX - width
 
 					local SubtabButton = Create("TextButton", {
 						Name = subtabName,
@@ -644,12 +719,13 @@ function Yerba:CreateWindow(title, subtitle)
 						TextSize = 13,
 						Size = UDim2.new(0, width, 0, 28),
 						Position = UDim2.new(0, currentX, 0.5, -14),
+						ZIndex = 4,
 						Parent = SubtabContainer
 					})
 					AddContextualStroke(SubtabButton)
 
 					SubtabButtons[subtabName] = SubtabButton
-					currentX = currentX - spacing
+					currentX = currentX + width + spacing
 
 					SubtabButton.MouseButton1Click:Connect(function()
 						CloseAllPopups()
@@ -675,6 +751,7 @@ function Yerba:CreateWindow(title, subtitle)
 				Size = UDim2.new(1, 0, 1, -36),
 				Position = UDim2.new(0, 0, 0, 34),
 				ClipsDescendants = true,
+				ZIndex = 2,
 				Parent = SectionFrame
 			})
 
@@ -694,6 +771,7 @@ function Yerba:CreateWindow(title, subtitle)
 					ScrollBarImageColor3 = Theme.Accent,
 					ScrollBarImageTransparency = 0.5,
 					Visible = subtabName == Section.CurrentSubtab,
+					ZIndex = 3,
 					Parent = ContentHolder
 				})
 
@@ -764,6 +842,7 @@ function Yerba:CreateWindow(title, subtitle)
 					Name = toggleName,
 					BackgroundTransparency = 1,
 					Size = UDim2.new(1, 0, 0, 22),
+					ZIndex = 4,
 					Parent = parentContent
 				})
 
@@ -775,7 +854,8 @@ function Yerba:CreateWindow(title, subtitle)
 					TextColor3 = Theme.Text,
 					TextSize = 14,
 					TextXAlignment = Enum.TextXAlignment.Left,
-					Size = UDim2.new(1, -95, 1, 0),
+					Size = UDim2.new(1, -70, 1, 0),
+					ZIndex = 5,
 					Parent = ToggleFrame
 				})
 				AddContextualStroke(Label)
@@ -786,7 +866,8 @@ function Yerba:CreateWindow(title, subtitle)
 					BorderSizePixel = 0,
 					Text = "",
 					Size = UDim2.new(0, 18, 0, 18),
-					Position = UDim2.new(1, -90, 0.5, -9),
+					Position = UDim2.new(1, -65, 0.5, -9),
+					ZIndex = 5,
 					Parent = ToggleFrame
 				})
 				AddCorner(Checkbox, 5)
@@ -800,24 +881,12 @@ function Yerba:CreateWindow(title, subtitle)
 					TextColor3 = Theme.TextDarker,
 					TextSize = 13,
 					Size = UDim2.new(0, 32, 0, 18),
-					Position = UDim2.new(1, -65, 0.5, -9),
+					Position = UDim2.new(1, -40, 0.5, -9),
+					ZIndex = 5,
 					Parent = ToggleFrame
 				})
 				AddCorner(KeybindBtn, 5)
 				local KeybindStroke = AddStroke(KeybindBtn, Theme.Border)
-
-				local PlusBtn = Create("TextButton", {
-					Name = "Plus",
-					BackgroundTransparency = 1,
-					FontFace = Fonts.Inconsolata,
-					Text = "+",
-					TextColor3 = Theme.Text,
-					TextSize = 16,
-					Size = UDim2.new(0, 18, 0, 18),
-					Position = UDim2.new(1, -25, 0.5, -9),
-					Parent = ToggleFrame
-				})
-				AddContextualStroke(PlusBtn)
 
 				local KeybindModeMenu = Create("Frame", {
 					Name = "KeybindModes",
@@ -917,19 +986,6 @@ function Yerba:CreateWindow(title, subtitle)
 					Tween(KeybindModeMenu, {Size = UDim2.new(0, 80, 0, 75)}, 0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 				end)
 
-				local plusMenu = CreatePlusMenu({
-					Name = toggleName .. " additionals",
-					Button = PlusBtn
-				})
-
-				PlusBtn.MouseButton1Click:Connect(function()
-					if plusMenu.Open then
-						plusMenu.Close()
-					else
-						plusMenu.Open_()
-					end
-				end)
-
 				local function UpdateToggle()
 					Tween(Checkbox, {BackgroundColor3 = Toggle.Value and Theme.Enabled or Theme.Disabled}, 0.15)
 					callback(Toggle.Value)
@@ -1006,9 +1062,45 @@ function Yerba:CreateWindow(title, subtitle)
 					return Toggle.Mode
 				end
 
+				Toggle.Frame = ToggleFrame
+				Toggle.KeybindButton = KeybindBtn
+
 				if default then callback(default) end
 				task.defer(UpdateSectionSize)
 				return Toggle
+			end
+
+			function Section:AddSideMenu(element, name)
+				if not element or not element.KeybindButton then return end
+
+				local SideMenuBtn = Create("TextButton", {
+					Name = "SideMenu",
+					BackgroundTransparency = 1,
+					FontFace = Fonts.Inconsolata,
+					Text = "+",
+					TextColor3 = Theme.Text,
+					TextSize = 16,
+					Size = UDim2.new(0, 18, 0, 18),
+					Position = UDim2.new(1, -3, 0.5, -9),
+					ZIndex = 5,
+					Parent = element.Frame
+				})
+				AddContextualStroke(SideMenuBtn)
+
+				local sideMenu = CreateSideMenu({
+					Name = (name or "side menu"),
+					Button = SideMenuBtn
+				})
+
+				SideMenuBtn.MouseButton1Click:Connect(function()
+					if sideMenu.Open then
+						sideMenu.Close()
+					else
+						sideMenu.Open_()
+					end
+				end)
+
+				return sideMenu
 			end
 
 			function Section:CreateDropdown(options)
@@ -1029,6 +1121,7 @@ function Yerba:CreateWindow(title, subtitle)
 					Name = dropdownName,
 					BackgroundTransparency = 1,
 					Size = UDim2.new(1, 0, 0, 22),
+					ZIndex = 4,
 					Parent = parentContent
 				})
 
@@ -1041,6 +1134,7 @@ function Yerba:CreateWindow(title, subtitle)
 					TextSize = 14,
 					TextXAlignment = Enum.TextXAlignment.Left,
 					Size = UDim2.new(0.42, 0, 1, 0),
+					ZIndex = 5,
 					Parent = DropdownFrame
 				})
 				AddContextualStroke(Label)
@@ -1051,6 +1145,7 @@ function Yerba:CreateWindow(title, subtitle)
 					Text = "",
 					Size = UDim2.new(0.55, 0, 0, 22),
 					Position = UDim2.new(0.45, 0, 0, 0),
+					ZIndex = 5,
 					Parent = DropdownFrame
 				})
 				AddCorner(DropdownBtn, 5)
@@ -1067,6 +1162,7 @@ function Yerba:CreateWindow(title, subtitle)
 					TextTruncate = Enum.TextTruncate.AtEnd,
 					Size = UDim2.new(1, -24, 1, 0),
 					Position = UDim2.new(0, 6, 0, 0),
+					ZIndex = 6,
 					Parent = DropdownBtn
 				})
 
@@ -1079,6 +1175,7 @@ function Yerba:CreateWindow(title, subtitle)
 					TextSize = 14,
 					Size = UDim2.new(0, 18, 1, 0),
 					Position = UDim2.new(1, -18, 0, 0),
+					ZIndex = 6,
 					Parent = DropdownBtn
 				})
 				AddContextualStroke(Plus)
@@ -1204,6 +1301,8 @@ function Yerba:CreateWindow(title, subtitle)
 					CreateItems()
 				end
 
+				Dropdown.Frame = DropdownFrame
+
 				callback(default)
 				task.defer(UpdateSectionSize)
 				return Dropdown
@@ -1228,6 +1327,7 @@ function Yerba:CreateWindow(title, subtitle)
 					Name = sliderName,
 					BackgroundTransparency = 1,
 					Size = UDim2.new(1, 0, 0, 32),
+					ZIndex = 4,
 					Parent = parentContent
 				})
 
@@ -1240,6 +1340,7 @@ function Yerba:CreateWindow(title, subtitle)
 					TextSize = 14,
 					TextXAlignment = Enum.TextXAlignment.Left,
 					Size = UDim2.new(0.7, 0, 0, 16),
+					ZIndex = 5,
 					Parent = SliderFrame
 				})
 				AddContextualStroke(Label)
@@ -1254,6 +1355,7 @@ function Yerba:CreateWindow(title, subtitle)
 					TextXAlignment = Enum.TextXAlignment.Right,
 					Size = UDim2.new(0.3, 0, 0, 16),
 					Position = UDim2.new(0.7, 0, 0, 0),
+					ZIndex = 5,
 					Parent = SliderFrame
 				})
 
@@ -1263,6 +1365,7 @@ function Yerba:CreateWindow(title, subtitle)
 					BorderSizePixel = 0,
 					Size = UDim2.new(1, 0, 0, 6),
 					Position = UDim2.new(0, 0, 0, 20),
+					ZIndex = 5,
 					Parent = SliderFrame
 				})
 				AddCorner(SliderBG, 4)
@@ -1273,6 +1376,7 @@ function Yerba:CreateWindow(title, subtitle)
 					BackgroundColor3 = Theme.Blue,
 					BorderSizePixel = 0,
 					Size = UDim2.new((default - min) / (max - min), 0, 1, 0),
+					ZIndex = 6,
 					Parent = SliderBG
 				})
 				AddCorner(SliderFill, 4)
@@ -1318,6 +1422,8 @@ function Yerba:CreateWindow(title, subtitle)
 					callback(value)
 				end
 
+				Slider.Frame = SliderFrame
+
 				callback(default)
 				task.defer(UpdateSectionSize)
 				return Slider
@@ -1340,6 +1446,7 @@ function Yerba:CreateWindow(title, subtitle)
 					Name = pickerName,
 					BackgroundTransparency = 1,
 					Size = UDim2.new(1, 0, 0, 22),
+					ZIndex = 4,
 					Parent = parentContent
 				})
 
@@ -1352,6 +1459,7 @@ function Yerba:CreateWindow(title, subtitle)
 					TextSize = 14,
 					TextXAlignment = Enum.TextXAlignment.Left,
 					Size = UDim2.new(1, -45, 1, 0),
+					ZIndex = 5,
 					Parent = ColorFrame
 				})
 				AddContextualStroke(Label)
@@ -1363,6 +1471,7 @@ function Yerba:CreateWindow(title, subtitle)
 					Text = "",
 					Size = UDim2.new(0, 35, 0, 18),
 					Position = UDim2.new(1, -38, 0.5, -9),
+					ZIndex = 5,
 					Parent = ColorFrame
 				})
 				AddCorner(ColorBtn, 5)
@@ -1536,6 +1645,8 @@ function Yerba:CreateWindow(title, subtitle)
 					callback(color)
 				end
 
+				ColorPicker.Frame = ColorFrame
+
 				callback(default)
 				task.defer(UpdateSectionSize)
 				return ColorPicker
@@ -1557,6 +1668,7 @@ function Yerba:CreateWindow(title, subtitle)
 					TextColor3 = Theme.Text,
 					TextSize = 15,
 					Size = UDim2.new(1, 0, 0, 26),
+					ZIndex = 4,
 					Parent = parentContent
 				})
 				AddCorner(Button, 5)
@@ -1566,8 +1678,10 @@ function Yerba:CreateWindow(title, subtitle)
 				Button.MouseEnter:Connect(function() Tween(Button, {BackgroundColor3 = Theme.Hover}, 0.1) end)
 				Button.MouseLeave:Connect(function() Tween(Button, {BackgroundColor3 = Theme.TabFrame}, 0.1) end)
 
+				local ButtonObj = {Frame = Button}
+
 				task.defer(UpdateSectionSize)
-				return Button
+				return ButtonObj
 			end
 
 			function Section:CreateLabel(text, subtab)
@@ -1583,6 +1697,7 @@ function Yerba:CreateWindow(title, subtitle)
 					TextSize = 14,
 					TextXAlignment = Enum.TextXAlignment.Left,
 					Size = UDim2.new(1, 0, 0, 18),
+					ZIndex = 4,
 					Parent = parentContent
 				})
 				AddContextualStroke(LabelEl)
@@ -1591,7 +1706,8 @@ function Yerba:CreateWindow(title, subtitle)
 				return {
 					Set = function(_, newText)
 						LabelEl.Text = newText
-					end
+					end,
+					Frame = LabelEl
 				}
 			end
 
@@ -1612,6 +1728,7 @@ function Yerba:CreateWindow(title, subtitle)
 					Name = textboxName,
 					BackgroundTransparency = 1,
 					Size = UDim2.new(1, 0, 0, 22),
+					ZIndex = 4,
 					Parent = parentContent
 				})
 
@@ -1624,6 +1741,7 @@ function Yerba:CreateWindow(title, subtitle)
 					TextSize = 14,
 					TextXAlignment = Enum.TextXAlignment.Left,
 					Size = UDim2.new(0.4, 0, 1, 0),
+					ZIndex = 5,
 					Parent = TextboxFrame
 				})
 				AddContextualStroke(Label)
@@ -1640,6 +1758,7 @@ function Yerba:CreateWindow(title, subtitle)
 					TextXAlignment = Enum.TextXAlignment.Left,
 					Size = UDim2.new(0.58, 0, 0, 22),
 					Position = UDim2.new(0.42, 0, 0, 0),
+					ZIndex = 5,
 					Parent = TextboxFrame
 				})
 				AddCorner(Input, 5)
@@ -1659,6 +1778,8 @@ function Yerba:CreateWindow(title, subtitle)
 					Input.Text = value
 				end
 
+				Textbox.Frame = TextboxFrame
+
 				task.defer(UpdateSectionSize)
 				return Textbox
 			end
@@ -1673,6 +1794,351 @@ function Yerba:CreateWindow(title, subtitle)
 
 		table.insert(Window.Tabs, Tab)
 		return Tab
+	end
+
+	function Window:CreatePlayerList(options)
+		options = options or {}
+		local side = options.Side or "right"
+		local gap = options.Gap or 10
+		local onSpectate = options.OnSpectate or function() end
+		local onTeleport = options.OnTeleport or function() end
+
+		local PlayerList = {}
+		PlayerList.SelectedPlayer = nil
+
+		local PlayerListFrame = Create("Frame", {
+			Name = "Players",
+			BackgroundColor3 = Color3.fromRGB(24, 24, 24),
+			BorderSizePixel = 0,
+			ClipsDescendants = false,
+			Size = UDim2.new(0, 270, 0, 470),
+			Parent = ScreenGui
+		})
+		AddCorner(PlayerListFrame, 4)
+		AddStroke(PlayerListFrame, Theme.Border)
+
+		local function UpdatePosition()
+			local windowPos = MainWindow.AbsolutePosition
+			local windowSize = MainWindow.AbsoluteSize
+			local listSize = PlayerListFrame.AbsoluteSize
+
+			if side == "right" then
+				PlayerListFrame.Position = UDim2.new(
+					0, windowPos.X + windowSize.X + gap,
+					0, windowPos.Y
+				)
+			else
+				PlayerListFrame.Position = UDim2.new(
+					0, windowPos.X - listSize.X - gap,
+					0, windowPos.Y
+				)
+			end
+		end
+
+		MainWindow:GetPropertyChangedSignal("Position"):Connect(UpdatePosition)
+		MainWindow:GetPropertyChangedSignal("AbsolutePosition"):Connect(UpdatePosition)
+		task.defer(UpdatePosition)
+
+		AddGradientLine(PlayerListFrame, UDim2.new(0, 0, 0.069, 0), UDim2.new(1, 0, 0, 2))
+
+		local SearchContainer = Create("Frame", {
+			Name = "Searchbox",
+			BackgroundColor3 = Color3.fromRGB(25, 25, 25),
+			BorderSizePixel = 0,
+			Size = UDim2.new(0, 247, 0, 25),
+			Position = UDim2.new(0.039, 0, 0.086, 0),
+			Parent = PlayerListFrame
+		})
+		AddCorner(SearchContainer, 2)
+		AddStroke(SearchContainer, Theme.Border)
+
+		Create("ImageLabel", {
+			Name = "Icon",
+			BackgroundTransparency = 1,
+			ImageColor3 = Color3.fromRGB(174, 174, 175),
+			Image = "rbxassetid://128625562276776",
+			Size = UDim2.new(0, 18, 0, 18),
+			Position = UDim2.new(0, 5, 0.5, -9),
+			Parent = SearchContainer
+		})
+
+		local SearchBox = Create("TextBox", {
+			Name = "Input",
+			BackgroundTransparency = 1,
+			FontFace = Fonts.Inconsolata,
+			PlaceholderText = "search",
+			PlaceholderColor3 = Theme.TextDark,
+			Text = "",
+			TextColor3 = Color3.fromRGB(255, 255, 255),
+			TextSize = 14,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Size = UDim2.new(1, -30, 1, 0),
+			Position = UDim2.new(0, 28, 0, 0),
+			Parent = SearchContainer
+		})
+
+		local ListSection = Create("Frame", {
+			Name = "List",
+			BackgroundColor3 = Theme.TabFrame,
+			BorderSizePixel = 0,
+			Size = UDim2.new(0, 246, 0, 212),
+			Position = UDim2.new(0.035, 0, 0.163, 0),
+			Parent = PlayerListFrame
+		})
+		AddCorner(ListSection, 1)
+		AddStroke(ListSection, Theme.Border)
+
+		local ListHeader = Create("TextLabel", {
+			Name = "TabName",
+			BackgroundTransparency = 1,
+			FontFace = Fonts.Inconsolata,
+			Text = "player list",
+			TextColor3 = Theme.Text,
+			TextSize = 14,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Size = UDim2.new(1, -10, 0, 21),
+			Position = UDim2.new(0.026, 0, 0.008, 0),
+			Parent = ListSection
+		})
+		AddContextualStroke(ListHeader)
+
+		AddGradientLine(ListSection, UDim2.new(0, 0, 0.129, 0), UDim2.new(1, 0, 0, 2))
+
+		local ListScroll = Create("ScrollingFrame", {
+			Name = "Layout",
+			BackgroundTransparency = 1,
+			BorderSizePixel = 0,
+			Size = UDim2.new(1, -2, 0, 184),
+			Position = UDim2.new(0, 0, 0.145, 0),
+			CanvasSize = UDim2.new(0, 0, 0, 0),
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			ScrollBarThickness = 2,
+			ScrollBarImageColor3 = Theme.Accent,
+			ScrollBarImageTransparency = 0.5,
+			Parent = ListSection
+		})
+
+		Create("UIListLayout", {
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Parent = ListScroll
+		})
+
+		local DetailSection = Create("Frame", {
+			Name = "Detail",
+			BackgroundColor3 = Theme.TabFrame,
+			BorderSizePixel = 0,
+			ClipsDescendants = false,
+			Size = UDim2.new(0, 246, 0, 121),
+			Position = UDim2.new(0.035, 0, 0.647, 0),
+			Parent = PlayerListFrame
+		})
+		AddCorner(DetailSection, 1)
+		AddStroke(DetailSection, Theme.Border)
+
+		local DetailHeader = Create("TextLabel", {
+			Name = "TabName",
+			BackgroundTransparency = 1,
+			FontFace = Fonts.Inconsolata,
+			Text = "detail",
+			TextColor3 = Theme.Text,
+			TextSize = 14,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Size = UDim2.new(1, -10, 0, 25),
+			Position = UDim2.new(0.026, 0, 0.018, 0),
+			Parent = DetailSection
+		})
+		AddContextualStroke(DetailHeader)
+
+		AddGradientLine(DetailSection, UDim2.new(0, 0, 0.228, 0), UDim2.new(1, 0, 0, 2))
+
+		local NameLabel = Create("TextLabel", {
+			Name = "name",
+			BackgroundTransparency = 1,
+			FontFace = Fonts.Inconsolata,
+			Text = "name: -",
+			TextColor3 = Theme.Text,
+			TextSize = 14,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Size = UDim2.new(0, 238, 0, 21),
+			Position = UDim2.new(0.03, 0, 0.291, 0),
+			Parent = DetailSection
+		})
+		AddContextualStroke(NameLabel)
+
+		local DisplayLabel = Create("TextLabel", {
+			Name = "display",
+			BackgroundTransparency = 1,
+			FontFace = Fonts.Inconsolata,
+			Text = "display: -",
+			TextColor3 = Theme.Text,
+			TextSize = 14,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Size = UDim2.new(0, 238, 0, 21),
+			Position = UDim2.new(0.034, 0, 0.459, 0),
+			Parent = DetailSection
+		})
+		AddContextualStroke(DisplayLabel)
+
+		local UserIdLabel = Create("TextLabel", {
+			Name = "userid",
+			BackgroundTransparency = 1,
+			FontFace = Fonts.Inconsolata,
+			Text = "userid: -",
+			TextColor3 = Theme.Text,
+			TextSize = 14,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Size = UDim2.new(0, 238, 0, 21),
+			Position = UDim2.new(0.034, 0, 0.619, 0),
+			Parent = DetailSection
+		})
+		AddContextualStroke(UserIdLabel)
+
+		local SpectateBtn = Create("TextButton", {
+			Name = "Spectate",
+			BackgroundColor3 = Theme.TabFrame,
+			FontFace = Fonts.SourceSans,
+			Text = "spectate",
+			TextColor3 = Theme.Text,
+			TextSize = 17,
+			Size = UDim2.new(0, 100, 0, 25),
+			Position = UDim2.new(0.032, 0, 1.068, 0),
+			Parent = DetailSection
+		})
+		AddCorner(SpectateBtn, 4)
+		AddStroke(SpectateBtn, Theme.Border)
+		AddContextualStroke(SpectateBtn)
+
+		local TeleportBtn = Create("TextButton", {
+			Name = "Teleport",
+			BackgroundColor3 = Theme.TabFrame,
+			FontFace = Fonts.SourceSans,
+			Text = "teleport",
+			TextColor3 = Theme.Text,
+			TextSize = 17,
+			Size = UDim2.new(0, 100, 0, 25),
+			Position = UDim2.new(0.541, 0, 1.068, 0),
+			Parent = DetailSection
+		})
+		AddCorner(TeleportBtn, 4)
+		AddStroke(TeleportBtn, Theme.Border)
+		AddContextualStroke(TeleportBtn)
+
+		for _, btn in pairs({SpectateBtn, TeleportBtn}) do
+			btn.MouseEnter:Connect(function()
+				Tween(btn, {BackgroundColor3 = Theme.Hover}, 0.1)
+			end)
+			btn.MouseLeave:Connect(function()
+				Tween(btn, {BackgroundColor3 = Theme.TabFrame}, 0.1)
+			end)
+		end
+
+		SpectateBtn.MouseButton1Click:Connect(function()
+			if PlayerList.SelectedPlayer then
+				onSpectate(PlayerList.SelectedPlayer)
+			end
+		end)
+
+		TeleportBtn.MouseButton1Click:Connect(function()
+			if PlayerList.SelectedPlayer then
+				onTeleport(PlayerList.SelectedPlayer)
+			end
+		end)
+
+		local function CreatePlayerButton(player)
+			local displayText = player.DisplayName ~= player.Name 
+				and player.DisplayName .. " (" .. player.Name .. ")" 
+				or player.Name
+
+			local PlayerBtn = Create("TextButton", {
+				Name = player.Name,
+				BackgroundTransparency = 1,
+				FontFace = Fonts.SourceSans,
+				Text = displayText,
+				TextColor3 = player == LocalPlayer and Theme.Blue or Theme.Text,
+				TextSize = 17,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				Size = UDim2.new(1, 0, 0, 31),
+				Parent = ListScroll
+			})
+			AddContextualStroke(PlayerBtn)
+			Create("UIPadding", {
+				PaddingLeft = UDim.new(0, 8),
+				Parent = PlayerBtn
+			})
+
+			PlayerBtn.MouseEnter:Connect(function()
+				if PlayerList.SelectedPlayer ~= player then
+					Tween(PlayerBtn, {BackgroundTransparency = 0.8}, 0.1)
+					PlayerBtn.BackgroundColor3 = Theme.Hover
+				end
+			end)
+			PlayerBtn.MouseLeave:Connect(function()
+				if PlayerList.SelectedPlayer ~= player then
+					Tween(PlayerBtn, {BackgroundTransparency = 1}, 0.1)
+				end
+			end)
+
+			PlayerBtn.MouseButton1Click:Connect(function()
+				for _, child in pairs(ListScroll:GetChildren()) do
+					if child:IsA("TextButton") then
+						child.BackgroundTransparency = 1
+						child.TextColor3 = child.Name == LocalPlayer.Name and Theme.Blue or Theme.Text
+					end
+				end
+
+				PlayerList.SelectedPlayer = player
+				PlayerBtn.BackgroundTransparency = 0.7
+				PlayerBtn.BackgroundColor3 = Theme.AccentDark
+				PlayerBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+
+				NameLabel.Text = "name: " .. player.Name
+				DisplayLabel.Text = "display: " .. player.DisplayName
+				UserIdLabel.Text = "userid: " .. player.UserId
+			end)
+
+			return PlayerBtn
+		end
+
+		local function UpdatePlayers()
+			for _, child in pairs(ListScroll:GetChildren()) do
+				if child:IsA("TextButton") then child:Destroy() end
+			end
+
+			local searchText = SearchBox.Text:lower()
+
+			for _, player in pairs(Players:GetPlayers()) do
+				local matchesSearch = searchText == "" or 
+					player.Name:lower():find(searchText) or 
+					player.DisplayName:lower():find(searchText)
+
+				if matchesSearch then
+					CreatePlayerButton(player)
+				end
+			end
+		end
+
+		SearchBox:GetPropertyChangedSignal("Text"):Connect(UpdatePlayers)
+		UpdatePlayers()
+
+		Players.PlayerAdded:Connect(UpdatePlayers)
+		Players.PlayerRemoving:Connect(function(player)
+			if PlayerList.SelectedPlayer == player then
+				PlayerList.SelectedPlayer = nil
+				NameLabel.Text = "name: -"
+				DisplayLabel.Text = "display: -"
+				UserIdLabel.Text = "userid: -"
+			end
+			UpdatePlayers()
+		end)
+
+		PlayerList.Frame = PlayerListFrame
+
+		function PlayerList:Refresh() UpdatePlayers() end
+		function PlayerList:Toggle(visible) PlayerListFrame.Visible = visible end
+		function PlayerList:GetSelected() return PlayerList.SelectedPlayer end
+		function PlayerList:SetSide(newSide) side = newSide UpdatePosition() end
+
+		return PlayerList
 	end
 
 	function Window:CreateWatermark(options)
@@ -1724,7 +2190,7 @@ function Yerba:CreateWindow(title, subtitle)
 		Create("ImageLabel", {
 			Name = "Icon",
 			BackgroundTransparency = 1,
-			Image = "rbxassetid://74807357385705",
+			Image = Yerba.Logo,
 			Size = UDim2.new(0, 34, 0, 34),
 			Position = UDim2.new(0, 1, 0, 1),
 			Parent = Watermark
@@ -1740,17 +2206,7 @@ function Yerba:CreateWindow(title, subtitle)
 		local slashPositions = {slash1X, slash2X, slash3X}
 
 		for i, x in ipairs(slashPositions) do
-			Create("TextLabel", {
-				Name = "Slash" .. i,
-				BackgroundTransparency = 1,
-				FontFace = Fonts.ComicNeue,
-				Text = "|",
-				TextColor3 = Theme.AccentDark,
-				TextSize = 21,
-				Size = UDim2.new(0, 10, 1, 0),
-				Position = UDim2.new(0, x - 5, 0, 0),
-				Parent = Watermark
-			})
+			AddSlash(Watermark, x, 1)
 		end
 
 		local NameLabel = Create("TextLabel", {
@@ -1955,10 +2411,15 @@ function Yerba:CreateWindow(title, subtitle)
 		ScreenGui:Destroy()
 	end
 
+	table.insert(Yerba.Windows, Window)
+
 	return Window
 end
 
-local Window = Yerba:CreateWindow("Yerba", "v4.0")
+local Window = Yerba:CreateWindow("Yerba", "v1.3", {
+	Width = 620,
+	Height = 480
+})
 
 local Watermark = Window:CreateWatermark({
 	Title = "Yerba",
@@ -1966,6 +2427,21 @@ local Watermark = Window:CreateWatermark({
 })
 
 local KeybindsDisplay = Window:CreateKeybindsDisplay()
+
+local PlayerList = Window:CreatePlayerList({
+	Side = "right",
+	Gap = 10,
+	OnSpectate = function(player)
+		print("Spectating:", player.Name)
+	end,
+	OnTeleport = function(player)
+		if player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+			LocalPlayer.Character.HumanoidRootPart.CFrame = player.Character.HumanoidRootPart.CFrame
+		end
+	end
+})
+
+PlayerList:SetSide("left")
 
 local CombatTab = Window:CreateTab("combat")
 local VisualsTab = Window:CreateTab("visuals")
@@ -1981,6 +2457,8 @@ local AimbotToggle = AimbotSection:CreateToggle({
 		print("Aimbot:", value)
 	end
 })
+
+AimbotSection:AddSideMenu(AimbotToggle, "Aimbot Settings")
 
 local AimbotTarget = AimbotSection:CreateDropdown({
 	Name = "Target",
@@ -2055,6 +2533,8 @@ local TriggerBot = TriggerSection:CreateToggle({
 		print("Triggerbot:", value)
 	end
 })
+
+TriggerSection:AddSideMenu(TriggerBot, "Trigger Settings")
 
 local TriggerDelay = TriggerSection:CreateSlider({
 	Name = "Delay (ms)",
@@ -2263,7 +2743,7 @@ local TeleportBtn = UtilitySection:CreateButton({
 	end
 })
 
-local InfoLabel = UtilitySection:CreateLabel("Made with Yerba UI v4")
+local InfoLabel = UtilitySection:CreateLabel("Made with Yerba UI v1.3")
 
 task.spawn(function()
 	wait(3)
@@ -2271,22 +2751,10 @@ task.spawn(function()
 end)
 
 task.spawn(function()
-	wait(5)
-	local players = {}
-	for _, player in pairs(game.Players:GetPlayers()) do
-		table.insert(players, player.Name)
-	end
-end)
-
-task.spawn(function()
 	wait(7)
 	BoxColor:Set(Color3.fromRGB(0, 255, 255))
 end)
 
-print("Aimbot keybind mode:", AimbotToggle:GetMode())
-
-InfoLabel:Set("Status: Active")
-
-print("Yerba UI loaded successfully!")
+print("Yerba UI v" .. Yerba.Version .. " loaded successfully!")
 
 return Yerba
