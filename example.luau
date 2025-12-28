@@ -7,11 +7,10 @@
 
 local Yerba = loadstring(game:HttpGet("https://raw.githubusercontent.com/n-0clip/yerba-ui/main/yerba.luau"))()
 
-Yerba.Logo = "rbxassetid://95816097006870" -- you need to do this or else watermark will have yerba icon
-
 local Window = Yerba:CreateWindow("My Script", "v1.0", {
 	Width = 620,
 	Height = 480,
+    Logo = "rbxassetid://95816097006870"
 })
 
 local Watermark = Window:CreateWatermark({
