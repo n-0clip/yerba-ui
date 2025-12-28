@@ -7,6 +7,7 @@
         ver: 1.3
     - The ui library
 	- added example idk
+	- adding performance (in 1 day maybe) and fixing some bugs...
 
 --]]
 
