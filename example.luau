@@ -1,10 +1,6 @@
 --[[
-    YERBA UI v1.4 - Complete Example Guide
-    
     Creator: n-0clip
     GitHub: https://github.com/n-0clip/yerba-ui
-    
-    Load: local Yerba = loadstring(game:HttpGet("https://raw.githubusercontent.com/n-0clip/yerba-ui/main/yerba.luau"))()
     
     Hotkey: RightShift - Toggle UI
 --]]
