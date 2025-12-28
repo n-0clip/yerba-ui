@@ -3437,7 +3437,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 		options = options or {}
 		local wmTitle = options.Title or "Yerba"
 		local wmSubtitle = options.Subtitle or "with<3"
-        local wmLogo = Window.Logo
+        local wmLogo = Yerba.Logo or Window.Logo
 
 		local TextService = game:GetService("TextService")
 
