@@ -266,6 +266,8 @@ function Yerba:CreateWindow(title, subtitle, options)
 	local SECTION_GAP = Yerba.Scale.SectionGap
 	local CONTENT_PADDING = Yerba.Scale.ContentPadding
 
+    Window.Logo = options.Logo
+
 	local function CloseAllDropdowns()
 		for _, dropdown in pairs(Window.OpenDropdowns) do
 			if dropdown.Close then dropdown.Close() end
@@ -3424,6 +3426,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 		options = options or {}
 		local wmTitle = options.Title or "Yerba"
 		local wmSubtitle = options.Subtitle or "with<3"
+        local wmLogo = Window.Logo
 
 		local TextService = game:GetService("TextService")
 
@@ -3469,7 +3472,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 		Create("ImageLabel", {
 			Name = "Icon",
 			BackgroundTransparency = 1,
-			Image = Yerba.Logo,
+			Image = wmLogo,
 			Size = UDim2.new(0, 34, 0, 34),
 			Position = UDim2.new(0, 1, 0, 1),
 			Parent = Watermark
