@@ -5,11 +5,9 @@
     original: yerba external
 
         ver: 1.4
-    - Fixed side menu
-    - Added keybind as sub-element of toggle
-    - Dot highlighting on hover
-    - Player list linked to tab and window visibility
-    - Fixed corners
+	- dragging
+	- fixed dot 
+	- not supported for mobile!
 
 --]]
 
@@ -221,11 +219,28 @@ local function AddDotPattern(parent, enableHover)
 			lastHighlighted = {}
 		end
 
-		parent.MouseMoved:Connect(function(x, y)
-			HighlightNearbyDots(x, y)
+		local connection
+		connection = UserInputService.InputChanged:Connect(function(input)
+			if input.UserInputType == Enum.UserInputType.MouseMovement then
+				local mouse = LocalPlayer:GetMouse()
+				local mousePos = Vector2.new(mouse.X, mouse.Y)
+
+				local containerPos = DotContainer.AbsolutePosition
+				local containerSize = DotContainer.AbsoluteSize
+
+				if mousePos.X >= containerPos.X and mousePos.X <= containerPos.X + containerSize.X and
+					mousePos.Y >= containerPos.Y and mousePos.Y <= containerPos.Y + containerSize.Y then
+					HighlightNearbyDots(mousePos.X, mousePos.Y)
+				else
+					ResetDots()
+				end
+			end
 		end)
 
-		parent.MouseLeave:Connect(function()
+		DotContainer.Destroying:Connect(function()
+			if connection then 
+				connection:Disconnect() 
+			end
 			ResetDots()
 		end)
 	end
@@ -435,6 +450,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 	})
 
 	local dragging, dragInput, dragStart, startPos
+	local isDragging = false
 
 	TopBar.InputBegan:Connect(function(input)
 		if input.UserInputType == Enum.UserInputType.MouseButton1 then
@@ -443,9 +459,19 @@ function Yerba:CreateWindow(title, subtitle, options)
 			startPos = MainWindow.Position
 			CloseAllPopups()
 
+			if not isDragging then
+				isDragging = true
+				Tween(WindowScale, {Scale = 1.01}, 0.15, Enum.EasingStyle.Back)
+			end
+
 			input.Changed:Connect(function()
 				if input.UserInputState == Enum.UserInputState.End then
 					dragging = false
+
+					if isDragging then
+						isDragging = false
+						Tween(WindowScale, {Scale = 1}, 0.2, Enum.EasingStyle.Back)
+					end
 				end
 			end)
 		end
@@ -460,10 +486,13 @@ function Yerba:CreateWindow(title, subtitle, options)
 	UserInputService.InputChanged:Connect(function(input)
 		if input == dragInput and dragging then
 			local delta = input.Position - dragStart
-			MainWindow.Position = UDim2.new(
+
+			local targetPos = UDim2.new(
 				startPos.X.Scale, startPos.X.Offset + delta.X,
 				startPos.Y.Scale, startPos.Y.Offset + delta.Y
 			)
+
+			MainWindow.Position = targetPos
 		end
 	end)
 
@@ -1668,6 +1697,292 @@ function Yerba:CreateWindow(title, subtitle, options)
 				task.defer(UpdateSectionSize)
 				return Dropdown
 			end
+			
+			function Section:CreateMultiDropdown(options)
+				options = options or {}
+				local dropdownName = options.Name or "Multi Dropdown"
+				local items = options.Items or {}
+				local default = options.Default or {}
+				local callback = options.Callback or function() end
+				local subtab = options.Subtab or Section.CurrentSubtab
+
+				local MultiDropdown = {}
+				MultiDropdown.Values = {}
+				MultiDropdown.Open = false
+
+				for _, item in pairs(default) do
+					MultiDropdown.Values[item] = true
+				end
+
+				local parentContent = Section.SubtabContents[subtab] and Section.SubtabContents[subtab].Content or GetCurrentContent()
+
+				local DropdownFrame = Create("Frame", {
+					Name = dropdownName,
+					BackgroundTransparency = 1,
+					Size = UDim2.new(1, 0, 0, 22),
+					ZIndex = 4,
+					Parent = parentContent
+				})
+
+				local Label = Create("TextLabel", {
+					Name = "Name",
+					BackgroundTransparency = 1,
+					FontFace = Fonts.Inconsolata,
+					Text = dropdownName,
+					TextColor3 = Theme.Text,
+					TextSize = 14,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					Size = UDim2.new(0.42, 0, 1, 0),
+					ZIndex = 5,
+					Parent = DropdownFrame
+				})
+				AddContextualStroke(Label)
+
+				local DropdownBtn = Create("TextButton", {
+					Name = "Dropdown",
+					BackgroundColor3 = Theme.Tertiary,
+					Text = "",
+					Size = UDim2.new(0.55, 0, 0, 22),
+					Position = UDim2.new(0.45, 0, 0, 0),
+					ZIndex = 5,
+					Parent = DropdownFrame
+				})
+				AddCorner(DropdownBtn, 5)
+				local DropdownStroke = AddStroke(DropdownBtn, Theme.Border)
+
+				local function UpdateText()
+					local selected = {}
+					for item, enabled in pairs(MultiDropdown.Values) do
+						if enabled then
+							table.insert(selected, item)
+						end
+					end
+
+					local text = #selected > 0 and table.concat(selected, ", ") or "None"
+					if #text > 20 then
+						text = #selected .. " selected"
+					end
+					return text
+				end
+
+				local ValueLabel = Create("TextLabel", {
+					Name = "Value",
+					BackgroundTransparency = 1,
+					FontFace = Fonts.Inconsolata,
+					Text = UpdateText(),
+					TextColor3 = Theme.TextDarker,
+					TextSize = 13,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					TextTruncate = Enum.TextTruncate.AtEnd,
+					Size = UDim2.new(1, -24, 1, 0),
+					Position = UDim2.new(0, 6, 0, 0),
+					ZIndex = 6,
+					Parent = DropdownBtn
+				})
+
+				local Plus = Create("TextLabel", {
+					Name = "Plus",
+					BackgroundTransparency = 1,
+					FontFace = Fonts.Inconsolata,
+					Text = "+",
+					TextColor3 = Theme.Text,
+					TextSize = 14,
+					Size = UDim2.new(0, 18, 1, 0),
+					Position = UDim2.new(1, -18, 0, 0),
+					ZIndex = 6,
+					Parent = DropdownBtn
+				})
+				AddContextualStroke(Plus)
+
+				local DropdownList = Create("Frame", {
+					Name = dropdownName .. "List",
+					BackgroundColor3 = Theme.Secondary,
+					BorderSizePixel = 0,
+					ClipsDescendants = true,
+					Size = UDim2.new(0, 0, 0, 0),
+					Visible = false,
+					ZIndex = 50,
+					Parent = ScreenGui
+				})
+				AddCorner(DropdownList, 6)
+				AddStroke(DropdownList, Theme.Border)
+
+				local ListScroll = Create("ScrollingFrame", {
+					Name = "List",
+					BackgroundTransparency = 1,
+					BorderSizePixel = 0,
+					Size = UDim2.new(1, 0, 1, 0),
+					CanvasSize = UDim2.new(0, 0, 0, #items * 26),
+					ScrollBarThickness = 2,
+					ScrollBarImageColor3 = Theme.Accent,
+					ZIndex = 51,
+					Parent = DropdownList
+				})
+
+				Create("UIListLayout", {
+					SortOrder = Enum.SortOrder.LayoutOrder,
+					Parent = ListScroll
+				})
+
+				local function CloseDropdown()
+					if not MultiDropdown.Open then return end
+					MultiDropdown.Open = false
+					Plus.Text = "+"
+					Tween(DropdownList, {Size = UDim2.new(0, DropdownBtn.AbsoluteSize.X, 0, 0)}, 0.15)
+					task.delay(0.15, function()
+						DropdownList.Visible = false
+					end)
+				end
+
+				MultiDropdown.Close = CloseDropdown
+
+				local function CreateItems()
+					for _, child in pairs(ListScroll:GetChildren()) do
+						if child:IsA("Frame") then child:Destroy() end
+					end
+
+					for _, item in ipairs(items) do
+						local ItemFrame = Create("Frame", {
+							Name = item,
+							BackgroundColor3 = Theme.Secondary,
+							Size = UDim2.new(1, 0, 0, 26),
+							ZIndex = 52,
+							Parent = ListScroll
+						})
+
+						local Dot = Create("Frame", {
+							Name = "Dot",
+							BackgroundColor3 = Theme.Blue,
+							BorderSizePixel = 0,
+							Size = UDim2.new(0, 6, 0, 6),
+							Position = UDim2.new(0, 6, 0.5, -3),
+							Visible = MultiDropdown.Values[item] or false,
+							ZIndex = 54,
+							Parent = ItemFrame
+						})
+						AddCorner(Dot, 10)
+
+						local ItemLabel = Create("TextLabel", {
+							Name = "Label",
+							BackgroundTransparency = 1,
+							FontFace = Fonts.Inconsolata,
+							Text = item,
+							TextColor3 = Theme.Text,
+							TextSize = 13,
+							TextXAlignment = Enum.TextXAlignment.Left,
+							Size = UDim2.new(1, -20, 1, 0),
+							Position = UDim2.new(0, MultiDropdown.Values[item] and 18 or 6, 0, 0),
+							ZIndex = 53,
+							Parent = ItemFrame
+						})
+
+						local ItemBtn = Create("TextButton", {
+							Name = "Button",
+							BackgroundTransparency = 1,
+							Text = "",
+							Size = UDim2.new(1, 0, 1, 0),
+							ZIndex = 54,
+							Parent = ItemFrame
+						})
+
+						ItemBtn.MouseEnter:Connect(function()
+							Tween(ItemFrame, {BackgroundColor3 = Theme.Hover}, 0.1)
+						end)
+						ItemBtn.MouseLeave:Connect(function()
+							Tween(ItemFrame, {BackgroundColor3 = Theme.Secondary}, 0.1)
+						end)
+
+						ItemBtn.MouseButton1Click:Connect(function()
+							MultiDropdown.Values[item] = not MultiDropdown.Values[item]
+
+							if MultiDropdown.Values[item] then
+								Dot.Visible = true
+								Dot.Size = UDim2.new(0, 0, 0, 0)
+								Tween(Dot, {Size = UDim2.new(0, 6, 0, 6)}, 0.2, Enum.EasingStyle.Back)
+								Tween(ItemLabel, {Position = UDim2.new(0, 18, 0, 0)}, 0.3, Enum.EasingStyle.Back)
+							else
+								Tween(Dot, {Size = UDim2.new(0, 0, 0, 0)}, 0.15)
+								Tween(ItemLabel, {Position = UDim2.new(0, 6, 0, 0)}, 0.3, Enum.EasingStyle.Back)
+								task.delay(0.15, function()
+									if not MultiDropdown.Values[item] then
+										Dot.Visible = false
+									end
+								end)
+							end
+
+							ValueLabel.Text = UpdateText()
+
+							local selected = {}
+							for k, v in pairs(MultiDropdown.Values) do
+								if v then table.insert(selected, k) end
+							end
+							callback(selected)
+						end)
+					end
+					ListScroll.CanvasSize = UDim2.new(0, 0, 0, #items * 26)
+				end
+
+				CreateItems()
+
+				DropdownBtn.MouseEnter:Connect(function()
+					Tween(DropdownStroke, {Color = Theme.Accent}, 0.1)
+				end)
+				DropdownBtn.MouseLeave:Connect(function()
+					if not MultiDropdown.Open then
+						Tween(DropdownStroke, {Color = Theme.Border}, 0.1)
+					end
+				end)
+
+				DropdownBtn.MouseButton1Click:Connect(function()
+					if MultiDropdown.Open then
+						CloseDropdown()
+						return
+					end
+
+					CloseAllPopups()
+
+					MultiDropdown.Open = true
+					table.insert(Window.OpenDropdowns, MultiDropdown)
+
+					local btnPos = DropdownBtn.AbsolutePosition
+					local btnSize = DropdownBtn.AbsoluteSize
+					local listHeight = math.min(#items * 26, 130)
+
+					DropdownList.Position = UDim2.new(0, btnPos.X, 0, btnPos.Y + btnSize.Y + 2)
+					DropdownList.Size = UDim2.new(0, btnSize.X, 0, 0)
+					DropdownList.Visible = true
+					Plus.Text = "-"
+					Tween(DropdownList, {Size = UDim2.new(0, btnSize.X, 0, listHeight)}, 0.15)
+				end)
+
+				function MultiDropdown:Set(values)
+					MultiDropdown.Values = {}
+					for _, item in pairs(values) do
+						MultiDropdown.Values[item] = true
+					end
+					ValueLabel.Text = UpdateText()
+					CreateItems()
+				end
+
+				function MultiDropdown:Get()
+					local selected = {}
+					for item, enabled in pairs(MultiDropdown.Values) do
+						if enabled then table.insert(selected, item) end
+					end
+					return selected
+				end
+
+				MultiDropdown.Frame = DropdownFrame
+
+				local initial = {}
+				for item, enabled in pairs(MultiDropdown.Values) do
+					if enabled then table.insert(initial, item) end
+				end
+				if #initial > 0 then callback(initial) end
+
+				task.defer(UpdateSectionSize)
+				return MultiDropdown
+			end
 
 			function Section:CreateSlider(options)
 				options = options or {}
@@ -2184,6 +2499,14 @@ function Yerba:CreateWindow(title, subtitle, options)
 
 				local parentContent = Section.SubtabContents[subtab] and Section.SubtabContents[subtab].Content or GetCurrentContent()
 
+				local ButtonFrame = Create("Frame", {
+					Name = "ButtonContainer",
+					BackgroundTransparency = 1,
+					Size = UDim2.new(1, 0, 0, 30),
+					ZIndex = 4,
+					Parent = parentContent
+				})
+
 				local Button = Create("TextButton", {
 					Name = buttonName,
 					BackgroundColor3 = Theme.TabFrame,
@@ -2192,17 +2515,74 @@ function Yerba:CreateWindow(title, subtitle, options)
 					TextColor3 = Theme.Text,
 					TextSize = 15,
 					Size = UDim2.new(1, 0, 0, 26),
-					ZIndex = 4,
-					Parent = parentContent
+					Position = UDim2.new(0, 0, 0, 2),
+					ZIndex = 5,
+					Parent = ButtonFrame
 				})
 				AddCorner(Button, 5)
-				AddStroke(Button, Theme.Border)
+				local ButtonStroke = AddStroke(Button, Theme.Border)
 
-				Button.MouseButton1Click:Connect(callback)
-				Button.MouseEnter:Connect(function() Tween(Button, {BackgroundColor3 = Theme.Hover}, 0.1) end)
-				Button.MouseLeave:Connect(function() Tween(Button, {BackgroundColor3 = Theme.TabFrame}, 0.1) end)
+				local ClickEffect = Create("Frame", {
+					Name = "ClickEffect",
+					BackgroundColor3 = Theme.Accent,
+					BackgroundTransparency = 1,
+					BorderSizePixel = 0,
+					Size = UDim2.new(0, 0, 0, 0),
+					Position = UDim2.new(0.5, 0, 0.5, 0),
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					ZIndex = 6,
+					Parent = Button
+				})
+				AddCorner(ClickEffect, 100)
 
-				local ButtonObj = {Frame = Button}
+				local isHovering = false
+
+				Button.MouseEnter:Connect(function()
+					if isHovering then return end
+					isHovering = true
+
+					Tween(Button, {BackgroundColor3 = Theme.Hover}, 0.2)
+					Tween(ButtonStroke, {Color = Theme.Accent}, 0.2)
+				end)
+
+				Button.MouseLeave:Connect(function()
+					if not isHovering then return end
+					isHovering = false
+
+					Tween(Button, {BackgroundColor3 = Theme.TabFrame}, 0.2)
+					Tween(ButtonStroke, {Color = Theme.Border}, 0.2)
+				end)
+
+				Button.MouseButton1Click:Connect(function()
+					ClickEffect.Size = UDim2.new(0, 0, 0, 0)
+					ClickEffect.BackgroundTransparency = 0.7
+
+					Tween(ClickEffect, {
+						Size = UDim2.new(2, 0, 2, 0),
+						BackgroundTransparency = 1
+					}, 0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+
+					callback()
+				end)
+
+				Button.MouseButton1Down:Connect(function()
+					Tween(Button, {BackgroundColor3 = Theme.AccentDark}, 0.1)
+				end)
+
+				Button.MouseButton1Up:Connect(function()
+					Tween(Button, {BackgroundColor3 = isHovering and Theme.Hover or Theme.TabFrame}, 0.1)
+				end)
+
+				local ButtonObj = {
+					Frame = ButtonFrame,
+					Button = Button,
+					SetText = function(_, text)
+						Button.Text = text
+					end,
+					SetCallback = function(_, newCallback)
+						callback = newCallback or function() end
+					end
+				}
 
 				task.defer(UpdateSectionSize)
 				return ButtonObj
@@ -3347,13 +3727,22 @@ local bind = InfoSection:CreateKeybind({
 })
 
 task.wait(2)
-info:SetContent("test !")
+info:SetContent("Loading complete!")
 
 local InfoLabel = UtilitySection:CreateLabel("Made with Yerba UI v1.4")
 
 KeybindsDisplay:AddKeybind("Aimbot", "X", "tog")
 KeybindsDisplay:AddKeybind("ESP", "P", "tog")
 KeybindsDisplay:AddKeybind("Trigger", "T", "hld")
+
+local MultiSelect = UtilitySection:CreateMultiDropdown({
+	Name = "Select Items",
+	Items = {"Item1", "Item2", "Item3", "Item4", "Item5", "Item6"},
+	Default = {"Item1", "Item3"},
+	Callback = function(selected)
+		print("Selected items:", table.concat(selected, ", "))
+	end
+})
 
 print("Yerba UI v" .. Yerba.Version .. " loaded successfully!")
 
