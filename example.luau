@@ -17,7 +17,6 @@ local CombatTab = Window:CreateTab("combat")
 local VisualsTab = Window:CreateTab("visuals")
 local MiscTab = Window:CreateTab("misc")
 
--- Player list linked to visuals tab
 local PlayerList = Window:CreatePlayerList({
 	Side = "right",
 	Gap = 10,
@@ -34,7 +33,6 @@ local PlayerList = Window:CreatePlayerList({
 
 local AimbotSection = CombatTab:CreateSection("aimbot", {"main", "settings", "fov"}, "left")
 
--- Toggle with keybind and side menu example
 local AimbotToggle = AimbotSection:CreateToggle({
 	Name = "Enable",
 	Default = false,
@@ -44,7 +42,6 @@ local AimbotToggle = AimbotSection:CreateToggle({
 	end
 })
 
--- Add keybind to toggle
 local AimbotKeybind = AimbotToggle:CreateKeybind({
 	Default = Enum.KeyCode.X,
 	Mode = "toggle",
@@ -53,7 +50,6 @@ local AimbotKeybind = AimbotToggle:CreateKeybind({
 	end
 })
 
--- Add side menu to toggle
 local AimbotSideMenu = AimbotToggle:CreateSideMenu("Aimbot Settings")
 AimbotSideMenu:CreateToggle({
 	Name = "Silent Aim",
@@ -105,7 +101,6 @@ local ShowFOV = AimbotSection:CreateToggle({
 	end
 })
 
--- Add keybind to ShowFOV toggle
 local ShowFOVKeybind = ShowFOV:CreateKeybind({
 	Default = Enum.KeyCode.F,
 	Mode = "toggle",
@@ -145,7 +140,6 @@ local TriggerBot = TriggerSection:CreateToggle({
 	end
 })
 
--- Add keybind with hold mode
 TriggerBot:CreateKeybind({
 	Default = Enum.KeyCode.T,
 	Mode = "hold",
@@ -396,9 +390,17 @@ info:SetContent("Loading complete!")
 
 local InfoLabel = UtilitySection:CreateLabel("Made with Yerba UI v1.4")
 
--- Add keybinds to display
 KeybindsDisplay:AddKeybind("Aimbot", "X", "tog")
 KeybindsDisplay:AddKeybind("ESP", "P", "tog")
 KeybindsDisplay:AddKeybind("Trigger", "T", "hld")
+
+local MultiSelect = UtilitySection:CreateMultiDropdown({
+	Name = "Select Items",
+	Items = {"Item1", "Item2", "Item3", "Item4", "Item5", "Item6"},
+	Default = {"Item1", "Item3"},
+	Callback = function(selected)
+		print("Selected items:", table.concat(selected, ", "))
+	end
+})
 
 print("Yerba UI v" .. Yerba.Version .. " loaded successfully!")
