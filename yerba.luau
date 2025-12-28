@@ -4,15 +4,17 @@
     creator: n-0clip
     original: yerba external
 
-        ver: 1.3
-    - The ui library
-	- added example idk
-	- adding performance (in 1 day maybe) and fixing some bugs...
+        ver: 1.4
+    - Fixed side menu
+    - Added keybind as sub-element of toggle
+    - Dot highlighting on hover
+    - Player list linked to tab and window visibility
+    - Fixed corners
 
 --]]
 
 local Yerba = {
-	Version = '1.3',
+	Version = '1.4',
 	Logo = "rbxassetid://74807357385705",
 	Windows = {},
 	Scale = {
@@ -69,7 +71,8 @@ local Theme = {
 	Enabled = Color3.fromRGB(67, 144, 186),
 	Disabled = Color3.fromRGB(24, 24, 24),
 	Hover = Color3.fromRGB(35, 35, 35),
-	DotPattern = Color3.fromRGB(20, 23, 21)
+	DotPattern = Color3.fromRGB(20, 23, 21),
+	DotHover = Color3.fromRGB(67, 144, 186)
 }
 
 local function Create(instanceType, properties, children)
@@ -152,7 +155,7 @@ local function AddSlash(parent, x, zindex)
 	})
 end
 
-local function AddDotPattern(parent)
+local function AddDotPattern(parent, enableHover)
 	if Yerba.PerformanceMode then return end
 
 	local DotContainer = Create("Frame", {
@@ -165,10 +168,11 @@ local function AddDotPattern(parent)
 
 	local dotSize = 2
 	local spacing = 15
+	local dots = {}
 
 	for x = 0, parent.AbsoluteSize.X, spacing do
 		for y = 0, parent.AbsoluteSize.Y, spacing do
-			Create("Frame", {
+			local dot = Create("Frame", {
 				BackgroundColor3 = Theme.DotPattern,
 				BorderSizePixel = 0,
 				Size = UDim2.new(0, dotSize, 0, dotSize),
@@ -176,7 +180,54 @@ local function AddDotPattern(parent)
 				ZIndex = 0,
 				Parent = DotContainer
 			})
+			AddCorner(dot, 1)
+			table.insert(dots, {frame = dot, x = x + dotSize/2, y = y + dotSize/2})
 		end
+	end
+
+	if enableHover then
+		local lastHighlighted = {}
+
+		local function HighlightNearbyDots(mouseX, mouseY)
+			for _, dot in pairs(lastHighlighted) do
+				Tween(dot, {BackgroundColor3 = Theme.DotPattern}, 0.15)
+			end
+			lastHighlighted = {}
+
+			local containerPos = DotContainer.AbsolutePosition
+			local relativeX = mouseX - containerPos.X
+			local relativeY = mouseY - containerPos.Y
+
+			for _, dotData in pairs(dots) do
+				local distance = math.sqrt((relativeX - dotData.x)^2 + (relativeY - dotData.y)^2)
+
+				if distance < 50 then
+					local alpha = 1 - (distance / 50)
+					local highlightColor = Color3.new(
+						Theme.DotPattern.R + (Theme.DotHover.R - Theme.DotPattern.R) * alpha,
+						Theme.DotPattern.G + (Theme.DotHover.G - Theme.DotPattern.G) * alpha,
+						Theme.DotPattern.B + (Theme.DotHover.B - Theme.DotPattern.B) * alpha
+					)
+					Tween(dotData.frame, {BackgroundColor3 = highlightColor}, 0.1)
+					table.insert(lastHighlighted, dotData.frame)
+				end
+			end
+		end
+
+		local function ResetDots()
+			for _, dot in pairs(lastHighlighted) do
+				Tween(dot, {BackgroundColor3 = Theme.DotPattern}, 0.2)
+			end
+			lastHighlighted = {}
+		end
+
+		parent.MouseMoved:Connect(function(x, y)
+			HighlightNearbyDots(x, y)
+		end)
+
+		parent.MouseLeave:Connect(function()
+			ResetDots()
+		end)
 	end
 
 	return DotContainer
@@ -193,6 +244,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 	Window.OpenSideMenus = {}
 	Window.OpenKeybindMenus = {}
 	Window.Visible = true
+	Window.PlayerLists = {}
 
 	local WINDOW_WIDTH = options.Width or Yerba.Scale.Window.X.Offset
 	local WINDOW_HEIGHT = options.Height or Yerba.Scale.Window.Y.Offset
@@ -237,7 +289,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 	end
 
 	local ScreenGui = Create("ScreenGui", {
-		Name = "YerbaUI",
+		Name = "Core",
 		ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
 		ResetOnSpawn = false,
 		Parent = LocalPlayer:WaitForChild("PlayerGui")
@@ -258,7 +310,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 	AddCorner(MainWindow, 6)
 	AddStroke(MainWindow, Theme.BorderAccent)
 
-	AddDotPattern(MainWindow)
+	AddDotPattern(MainWindow, true)
 
 	local WindowScale = Create("UIScale", {
 		Name = "Scale",
@@ -415,6 +467,16 @@ function Yerba:CreateWindow(title, subtitle, options)
 		end
 	end)
 
+	local function UpdatePlayerListsVisibility()
+		for _, plData in pairs(Window.PlayerLists) do
+			if Window.Visible and Window.ActiveTab and plData.Tab == Window.ActiveTab then
+				plData.Frame.Visible = true
+			else
+				plData.Frame.Visible = false
+			end
+		end
+	end
+
 	local function ToggleWindow(show)
 		Window.Visible = show
 		CloseAllPopups()
@@ -434,18 +496,21 @@ function Yerba:CreateWindow(title, subtitle, options)
 				end
 			end)
 		end
-	end
 
+		UpdatePlayerListsVisibility()
+	end
+	
 	local function CreateSideMenu(options)
 		local SideMenu = {}
 		SideMenu.Open = false
+		SideMenu.Elements = {}
 
 		local MenuFrame = Create("Frame", {
 			Name = "SideMenu",
 			BackgroundColor3 = Theme.Secondary,
-			BackgroundTransparency = 0.3,
+			BackgroundTransparency = 0.05,
 			BorderSizePixel = 0,
-			Size = UDim2.new(0, 180, 0, 0),
+			Size = UDim2.new(0, 200, 0, 0),
 			ClipsDescendants = true,
 			Visible = false,
 			ZIndex = 100,
@@ -458,13 +523,12 @@ function Yerba:CreateWindow(title, subtitle, options)
 			Name = "Upframe",
 			BackgroundColor3 = Theme.TabFrame,
 			BorderSizePixel = 0,
-			Size = UDim2.new(1, 16, 0, 33),
-			Position = UDim2.new(-0.04, 0, 0, 0),
+			Size = UDim2.new(1, 0, 0, 30),
+			Position = UDim2.new(0, 0, 0, 0),
 			ZIndex = 101,
 			Parent = MenuFrame
 		})
 		AddCorner(MenuHeader, 6)
-		AddStroke(MenuHeader, Theme.AccentBlue)
 
 		local MenuTitle = Create("TextLabel", {
 			Name = "TabName",
@@ -472,69 +536,393 @@ function Yerba:CreateWindow(title, subtitle, options)
 			FontFace = Fonts.Inconsolata,
 			Text = options.Name or "side menu",
 			TextColor3 = Theme.Text,
-			TextSize = 14,
-			Size = UDim2.new(1, 0, 1, 0),
-			Position = UDim2.new(0.04, 0, 0, 0),
+			TextSize = 13,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			Size = UDim2.new(1, -16, 1, 0),
+			Position = UDim2.new(0, 8, 0, 0),
 			ZIndex = 102,
 			Parent = MenuHeader
 		})
 		AddContextualStroke(MenuTitle)
 
-		local MenuContent = Create("Frame", {
+		AddGradientLine(MenuHeader, UDim2.new(0, 0, 1, -1), UDim2.new(1, 0, 0, 1))
+
+		local MenuContent = Create("ScrollingFrame", {
 			Name = "Content",
 			BackgroundTransparency = 1,
-			Size = UDim2.new(1, -10, 1, -40),
-			Position = UDim2.new(0, 5, 0, 38),
+			BorderSizePixel = 0,
+			Size = UDim2.new(1, -10, 1, -38),
+			Position = UDim2.new(0, 5, 0, 35),
+			CanvasSize = UDim2.new(0, 0, 0, 0),
+			AutomaticCanvasSize = Enum.AutomaticSize.Y,
+			ScrollBarThickness = 2,
+			ScrollBarImageColor3 = Theme.Accent,
 			ZIndex = 101,
 			Parent = MenuFrame
 		})
 
-		Create("UIListLayout", {
+		local ContentLayout = Create("UIListLayout", {
 			Padding = UDim.new(0, 5),
 			SortOrder = Enum.SortOrder.LayoutOrder,
 			Parent = MenuContent
 		})
 
-		local InfoLabel = Create("TextLabel", {
-			Name = "Info",
-			BackgroundTransparency = 1,
-			FontFace = Fonts.Inconsolata,
-			Text = "additional settings",
-			TextColor3 = Theme.TextDark,
-			TextSize = 12,
-			Size = UDim2.new(1, 0, 0, 20),
-			ZIndex = 102,
+		Create("UIPadding", {
+			PaddingTop = UDim.new(0, 2),
+			PaddingBottom = UDim.new(0, 4),
+			PaddingLeft = UDim.new(0, 2),
+			PaddingRight = UDim.new(0, 2),
 			Parent = MenuContent
 		})
+
+		local function UpdateMenuSize()
+			local contentHeight = ContentLayout.AbsoluteContentSize.Y + 48
+			local targetHeight = math.clamp(contentHeight, 50, 220)
+			if SideMenu.Open then
+				Tween(MenuFrame, {Size = UDim2.new(0, 200, 0, targetHeight)}, 0.15)
+			end
+		end
 
 		function SideMenu.Open_()
 			if SideMenu.Open then return end
 
-			CloseAllPopups()
+			CloseAllSideMenus()
 			SideMenu.Open = true
 			table.insert(Window.OpenSideMenus, SideMenu)
 
 			local btnPos = options.Button.AbsolutePosition
-			MenuFrame.Position = UDim2.new(0, btnPos.X - 160, 0, btnPos.Y + 20)
-			MenuFrame.Size = UDim2.new(0, 180, 0, 0)
+			local btnSize = options.Button.AbsoluteSize
+			local screenSize = workspace.CurrentCamera.ViewportSize
+
+			local menuX = btnPos.X + btnSize.X + 10
+			local menuY = btnPos.Y - 10
+
+			if menuX + 200 > screenSize.X then
+				menuX = btnPos.X - 210
+			end
+
+			local contentHeight = ContentLayout.AbsoluteContentSize.Y + 48
+			local targetHeight = math.clamp(contentHeight, 50, 220)
+			if menuY + targetHeight > screenSize.Y then
+				menuY = screenSize.Y - targetHeight - 10
+			end
+
+			MenuFrame.Position = UDim2.new(0, menuX, 0, menuY)
+			MenuFrame.Size = UDim2.new(0, 200, 0, 0)
 			MenuFrame.Visible = true
-			Tween(MenuFrame, {Size = UDim2.new(0, 180, 0, 70)}, 0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+			Tween(MenuFrame, {Size = UDim2.new(0, 200, 0, targetHeight)}, 0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
 		end
 
 		function SideMenu.Close()
 			if not SideMenu.Open then return end
 			SideMenu.Open = false
-			Tween(MenuFrame, {Size = UDim2.new(0, 180, 0, 0)}, 0.15)
+			Tween(MenuFrame, {Size = UDim2.new(0, 200, 0, 0)}, 0.15)
 			task.delay(0.15, function()
-				MenuFrame.Visible = false
+				if not SideMenu.Open then
+					MenuFrame.Visible = false
+				end
 			end)
 		end
 
-		SideMenu.Frame = MenuFrame
+		function SideMenu:CreateToggle(opts)
+			opts = opts or {}
+			local toggleName = opts.Name or "Toggle"
+			local default = opts.Default or false
+			local callback = opts.Callback or function() end
 
+			local Toggle = {}
+			Toggle.Value = default
+
+			local ToggleFrame = Create("Frame", {
+				Name = toggleName,
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, 0, 0, 20),
+				ZIndex = 102,
+				Parent = MenuContent
+			})
+
+			local Label = Create("TextLabel", {
+				Name = "Name",
+				BackgroundTransparency = 1,
+				FontFace = Fonts.Inconsolata,
+				Text = toggleName,
+				TextColor3 = Theme.Text,
+				TextSize = 13,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				Size = UDim2.new(1, -24, 1, 0),
+				ZIndex = 103,
+				Parent = ToggleFrame
+			})
+			AddContextualStroke(Label)
+
+			local Checkbox = Create("TextButton", {
+				Name = "Button",
+				BackgroundColor3 = default and Theme.Enabled or Theme.Disabled,
+				BorderSizePixel = 0,
+				Text = "",
+				Size = UDim2.new(0, 16, 0, 16),
+				Position = UDim2.new(1, -16, 0.5, -8),
+				ZIndex = 103,
+				Parent = ToggleFrame
+			})
+			AddCorner(Checkbox, 4)
+			local CheckboxStroke = AddStroke(Checkbox, Theme.Border)
+
+			local function UpdateToggle()
+				Tween(Checkbox, {BackgroundColor3 = Toggle.Value and Theme.Enabled or Theme.Disabled}, 0.15)
+				callback(Toggle.Value)
+			end
+
+			Checkbox.MouseEnter:Connect(function()
+				Tween(CheckboxStroke, {Color = Theme.Accent}, 0.1)
+			end)
+			Checkbox.MouseLeave:Connect(function()
+				Tween(CheckboxStroke, {Color = Theme.Border}, 0.1)
+			end)
+
+			Checkbox.MouseButton1Click:Connect(function()
+				Toggle.Value = not Toggle.Value
+				UpdateToggle()
+			end)
+
+			function Toggle:Set(value)
+				Toggle.Value = value
+				UpdateToggle()
+			end
+
+			function Toggle:Get()
+				return Toggle.Value
+			end
+
+			Toggle.Frame = ToggleFrame
+			table.insert(SideMenu.Elements, Toggle)
+			task.defer(UpdateMenuSize)
+
+			if default then callback(default) end
+			return Toggle
+		end
+
+		function SideMenu:CreateDropdown(opts)
+			opts = opts or {}
+			local dropdownName = opts.Name or "Dropdown"
+			local items = opts.Items or {}
+			local default = opts.Default or (items[1] or "None")
+			local callback = opts.Callback or function() end
+
+			local Dropdown = {}
+			Dropdown.Value = default
+
+			local DropdownFrame = Create("Frame", {
+				Name = dropdownName,
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, 0, 0, 20),
+				ZIndex = 102,
+				Parent = MenuContent
+			})
+
+			local Label = Create("TextLabel", {
+				Name = "Name",
+				BackgroundTransparency = 1,
+				FontFace = Fonts.Inconsolata,
+				Text = dropdownName,
+				TextColor3 = Theme.Text,
+				TextSize = 13,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				Size = UDim2.new(0.4, 0, 1, 0),
+				ZIndex = 103,
+				Parent = DropdownFrame
+			})
+			AddContextualStroke(Label)
+
+			local DropdownBtn = Create("TextButton", {
+				Name = "Dropdown",
+				BackgroundColor3 = Theme.Tertiary,
+				Text = "",
+				Size = UDim2.new(0.58, 0, 0, 18),
+				Position = UDim2.new(0.42, 0, 0.5, -9),
+				ZIndex = 103,
+				Parent = DropdownFrame
+			})
+			AddCorner(DropdownBtn, 4)
+			AddStroke(DropdownBtn, Theme.Border)
+
+			local ValueLabel = Create("TextLabel", {
+				Name = "Value",
+				BackgroundTransparency = 1,
+				FontFace = Fonts.Inconsolata,
+				Text = default,
+				TextColor3 = Theme.TextDarker,
+				TextSize = 11,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				TextTruncate = Enum.TextTruncate.AtEnd,
+				Size = UDim2.new(1, -18, 1, 0),
+				Position = UDim2.new(0, 5, 0, 0),
+				ZIndex = 104,
+				Parent = DropdownBtn
+			})
+
+			local Arrow = Create("TextLabel", {
+				Name = "Arrow",
+				BackgroundTransparency = 1,
+				FontFace = Fonts.Inconsolata,
+				Text = "▼",
+				TextColor3 = Theme.TextDark,
+				TextSize = 8,
+				Size = UDim2.new(0, 12, 1, 0),
+				Position = UDim2.new(1, -12, 0, 0),
+				ZIndex = 104,
+				Parent = DropdownBtn
+			})
+
+			local currentIndex = table.find(items, default) or 1
+
+			DropdownBtn.MouseButton1Click:Connect(function()
+				currentIndex = currentIndex + 1
+				if currentIndex > #items then currentIndex = 1 end
+				Dropdown.Value = items[currentIndex]
+				ValueLabel.Text = items[currentIndex]
+				callback(items[currentIndex])
+			end)
+
+			function Dropdown:Set(value)
+				Dropdown.Value = value
+				ValueLabel.Text = value
+				currentIndex = table.find(items, value) or 1
+				callback(value)
+			end
+
+			Dropdown.Frame = DropdownFrame
+			table.insert(SideMenu.Elements, Dropdown)
+			task.defer(UpdateMenuSize)
+
+			callback(default)
+			return Dropdown
+		end
+
+		function SideMenu:CreateSlider(opts)
+			opts = opts or {}
+			local sliderName = opts.Name or "Slider"
+			local min = opts.Min or 0
+			local max = opts.Max or 100
+			local default = opts.Default or min
+			local increment = opts.Increment or 1
+			local callback = opts.Callback or function() end
+
+			local Slider = {}
+			Slider.Value = default
+
+			local SliderFrame = Create("Frame", {
+				Name = sliderName,
+				BackgroundTransparency = 1,
+				Size = UDim2.new(1, 0, 0, 28),
+				ZIndex = 102,
+				Parent = MenuContent
+			})
+
+			local Label = Create("TextLabel", {
+				Name = "Name",
+				BackgroundTransparency = 1,
+				FontFace = Fonts.Inconsolata,
+				Text = sliderName,
+				TextColor3 = Theme.Text,
+				TextSize = 12,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				Size = UDim2.new(0.7, 0, 0, 12),
+				ZIndex = 103,
+				Parent = SliderFrame
+			})
+			AddContextualStroke(Label)
+
+			local ValueLbl = Create("TextLabel", {
+				Name = "Value",
+				BackgroundTransparency = 1,
+				FontFace = Fonts.Inconsolata,
+				Text = tostring(default),
+				TextColor3 = Theme.TextDarker,
+				TextSize = 11,
+				TextXAlignment = Enum.TextXAlignment.Right,
+				Size = UDim2.new(0.3, 0, 0, 12),
+				Position = UDim2.new(0.7, 0, 0, 0),
+				ZIndex = 103,
+				Parent = SliderFrame
+			})
+
+			local SliderBG = Create("Frame", {
+				Name = "Background",
+				BackgroundColor3 = Theme.Tertiary,
+				BorderSizePixel = 0,
+				Size = UDim2.new(1, 0, 0, 5),
+				Position = UDim2.new(0, 0, 0, 16),
+				ZIndex = 103,
+				Parent = SliderFrame
+			})
+			AddCorner(SliderBG, 3)
+			AddStroke(SliderBG, Theme.Border)
+
+			local SliderFill = Create("Frame", {
+				Name = "Fill",
+				BackgroundColor3 = Theme.Blue,
+				BorderSizePixel = 0,
+				Size = UDim2.new((default - min) / (max - min), 0, 1, 0),
+				ZIndex = 104,
+				Parent = SliderBG
+			})
+			AddCorner(SliderFill, 3)
+
+			local function UpdateSlider(input)
+				local percent = math.clamp((input.Position.X - SliderBG.AbsolutePosition.X) / SliderBG.AbsoluteSize.X, 0, 1)
+				local value = min + (percent * (max - min))
+				value = math.floor(value / increment + 0.5) * increment
+				value = math.clamp(value, min, max)
+
+				Slider.Value = value
+				SliderFill.Size = UDim2.new((value - min) / (max - min), 0, 1, 0)
+				ValueLbl.Text = tostring(value)
+				callback(value)
+			end
+
+			local sliding = false
+
+			SliderBG.InputBegan:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 then
+					sliding = true
+					UpdateSlider(input)
+				end
+			end)
+
+			SliderBG.InputEnded:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 then
+					sliding = false
+				end
+			end)
+
+			UserInputService.InputChanged:Connect(function(input)
+				if sliding and input.UserInputType == Enum.UserInputType.MouseMovement then
+					UpdateSlider(input)
+				end
+			end)
+
+			function Slider:Set(value)
+				value = math.clamp(value, min, max)
+				Slider.Value = value
+				SliderFill.Size = UDim2.new((value - min) / (max - min), 0, 1, 0)
+				ValueLbl.Text = tostring(value)
+				callback(value)
+			end
+
+			Slider.Frame = SliderFrame
+			table.insert(SideMenu.Elements, Slider)
+			task.defer(UpdateMenuSize)
+
+			callback(default)
+			return Slider
+		end
+
+		SideMenu.Frame = MenuFrame
 		return SideMenu
 	end
-
+	
 	function Window:CreateTab(name)
 		local Tab = {}
 		Tab.Name = name
@@ -621,6 +1009,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 			end)
 
 			Window.ActiveTab = Tab
+			UpdatePlayerListsVisibility()
 		end)
 
 		function Tab:CreateSection(sectionName, subtabs, side)
@@ -834,10 +1223,15 @@ function Yerba:CreateWindow(title, subtitle, options)
 
 				local Toggle = {}
 				Toggle.Value = default
-				Toggle.Keybind = nil
-				Toggle.Mode = "toggle"
+				Toggle.HasKeybind = false
+				Toggle.HasSideMenu = false
 
-				local parentContent = Section.SubtabContents[subtab] and Section.SubtabContents[subtab].Content or GetCurrentContent()
+				local parentContent
+				if Section.SubtabContents[subtab] then
+					parentContent = Section.SubtabContents[subtab].Content
+				else
+					parentContent = Section.Content
+				end
 
 				local ToggleFrame = Create("Frame", {
 					Name = toggleName,
@@ -855,7 +1249,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 					TextColor3 = Theme.Text,
 					TextSize = 14,
 					TextXAlignment = Enum.TextXAlignment.Left,
-					Size = UDim2.new(1, -70, 1, 0),
+					Size = UDim2.new(1, -30, 1, 0),
 					ZIndex = 5,
 					Parent = ToggleFrame
 				})
@@ -867,125 +1261,12 @@ function Yerba:CreateWindow(title, subtitle, options)
 					BorderSizePixel = 0,
 					Text = "",
 					Size = UDim2.new(0, 18, 0, 18),
-					Position = UDim2.new(1, -65, 0.5, -9),
+					Position = UDim2.new(1, -20, 0.5, -9),
 					ZIndex = 5,
 					Parent = ToggleFrame
 				})
 				AddCorner(Checkbox, 5)
 				local CheckboxStroke = AddStroke(Checkbox, Theme.Border)
-
-				local KeybindBtn = Create("TextButton", {
-					Name = "Keybind",
-					BackgroundColor3 = Theme.Tertiary,
-					FontFace = Fonts.Inconsolata,
-					Text = "-",
-					TextColor3 = Theme.TextDarker,
-					TextSize = 13,
-					Size = UDim2.new(0, 32, 0, 18),
-					Position = UDim2.new(1, -40, 0.5, -9),
-					ZIndex = 5,
-					Parent = ToggleFrame
-				})
-				AddCorner(KeybindBtn, 5)
-				local KeybindStroke = AddStroke(KeybindBtn, Theme.Border)
-
-				local KeybindModeMenu = Create("Frame", {
-					Name = "KeybindModes",
-					BackgroundColor3 = Theme.Secondary,
-					BorderSizePixel = 0,
-					Size = UDim2.new(0, 80, 0, 0),
-					ClipsDescendants = true,
-					Visible = false,
-					ZIndex = 100,
-					Parent = ScreenGui
-				})
-				AddCorner(KeybindModeMenu, 6)
-				AddStroke(KeybindModeMenu, Theme.AccentBlue)
-
-				local ModeContent = Create("Frame", {
-					Name = "Content",
-					BackgroundTransparency = 1,
-					Size = UDim2.new(1, -6, 1, -6),
-					Position = UDim2.new(0, 3, 0, 3),
-					ZIndex = 101,
-					Parent = KeybindModeMenu
-				})
-
-				Create("UIListLayout", {
-					Padding = UDim.new(0, 3),
-					SortOrder = Enum.SortOrder.LayoutOrder,
-					Parent = ModeContent
-				})
-
-				local keybindModes = {"toggle", "hold", "always"}
-				local modeButtons = {}
-
-				for _, mode in ipairs(keybindModes) do
-					local ModeBtn = Create("TextButton", {
-						Name = mode,
-						BackgroundColor3 = Toggle.Mode == mode and Theme.Blue or Theme.Tertiary,
-						FontFace = Fonts.Inconsolata,
-						Text = mode,
-						TextColor3 = Theme.Text,
-						TextSize = 12,
-						Size = UDim2.new(1, 0, 0, 22),
-						ZIndex = 102,
-						Parent = ModeContent
-					})
-					AddCorner(ModeBtn, 5)
-					AddStroke(ModeBtn, Theme.Border)
-
-					modeButtons[mode] = ModeBtn
-
-					ModeBtn.MouseEnter:Connect(function()
-						if Toggle.Mode ~= mode then
-							Tween(ModeBtn, {BackgroundColor3 = Theme.Hover}, 0.1)
-						end
-					end)
-					ModeBtn.MouseLeave:Connect(function()
-						if Toggle.Mode ~= mode then
-							Tween(ModeBtn, {BackgroundColor3 = Theme.Tertiary}, 0.1)
-						end
-					end)
-
-					ModeBtn.MouseButton1Click:Connect(function()
-						Toggle.Mode = mode
-
-						for m, btn in pairs(modeButtons) do
-							Tween(btn, {BackgroundColor3 = m == mode and Theme.Blue or Theme.Tertiary}, 0.15)
-						end
-
-						Tween(KeybindModeMenu, {Size = UDim2.new(0, 80, 0, 0)}, 0.15)
-						task.delay(0.15, function()
-							KeybindModeMenu.Visible = false
-						end)
-					end)
-				end
-
-				local keybindMenuObj = {
-					Close = function()
-						Tween(KeybindModeMenu, {Size = UDim2.new(0, 80, 0, 0)}, 0.15)
-						task.delay(0.15, function()
-							KeybindModeMenu.Visible = false
-						end)
-					end
-				}
-
-				KeybindBtn.MouseButton2Click:Connect(function()
-					if KeybindModeMenu.Visible then
-						keybindMenuObj.Close()
-						return
-					end
-
-					CloseAllPopups()
-					table.insert(Window.OpenKeybindMenus, keybindMenuObj)
-
-					local btnPos = KeybindBtn.AbsolutePosition
-					KeybindModeMenu.Position = UDim2.new(0, btnPos.X, 0, btnPos.Y + 20)
-					KeybindModeMenu.Size = UDim2.new(0, 80, 0, 0)
-					KeybindModeMenu.Visible = true
-					Tween(KeybindModeMenu, {Size = UDim2.new(0, 80, 0, 75)}, 0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
-				end)
 
 				local function UpdateToggle()
 					Tween(Checkbox, {BackgroundColor3 = Toggle.Value and Theme.Enabled or Theme.Disabled}, 0.15)
@@ -999,59 +1280,9 @@ function Yerba:CreateWindow(title, subtitle, options)
 					Tween(CheckboxStroke, {Color = Theme.Border}, 0.1)
 				end)
 
-				KeybindBtn.MouseEnter:Connect(function()
-					Tween(KeybindStroke, {Color = Theme.Accent}, 0.1)
-				end)
-				KeybindBtn.MouseLeave:Connect(function()
-					Tween(KeybindStroke, {Color = Theme.Border}, 0.1)
-				end)
-
 				Checkbox.MouseButton1Click:Connect(function()
 					Toggle.Value = not Toggle.Value
 					UpdateToggle()
-				end)
-
-				local binding = false
-				KeybindBtn.MouseButton1Click:Connect(function()
-					if binding then return end
-					binding = true
-					KeybindBtn.Text = "..."
-
-					local conn
-					conn = UserInputService.InputBegan:Connect(function(input, gpe)
-						if gpe then return end
-						if input.UserInputType == Enum.UserInputType.Keyboard then
-							Toggle.Keybind = input.KeyCode
-							KeybindBtn.Text = input.KeyCode.Name:sub(1, 3):upper()
-							binding = false
-							conn:Disconnect()
-						end
-					end)
-				end)
-
-				UserInputService.InputBegan:Connect(function(input, gpe)
-					if gpe then return end
-					if Toggle.Keybind and input.KeyCode == Toggle.Keybind then
-						if Toggle.Mode == "toggle" then
-							Toggle.Value = not Toggle.Value
-							UpdateToggle()
-						elseif Toggle.Mode == "hold" then
-							Toggle.Value = true
-							UpdateToggle()
-						elseif Toggle.Mode == "always" then
-							Toggle.Value = true
-							UpdateToggle()
-						end
-					end
-				end)
-
-				UserInputService.InputEnded:Connect(function(input, gpe)
-					if Toggle.Keybind and input.KeyCode == Toggle.Keybind then
-						if Toggle.Mode == "hold" then
-							Toggle.Value = false
-							UpdateToggle()
-						end
-					end
 				end)
 
 				function Toggle:Set(value)
@@ -1059,51 +1290,180 @@ function Yerba:CreateWindow(title, subtitle, options)
 					UpdateToggle()
 				end
 
-				function Toggle:GetMode()
-					return Toggle.Mode
+				function Toggle:Get()
+					return Toggle.Value
+				end
+
+				local function RecalculatePositions()
+					local rightOffset = 5
+
+					if Toggle.HasSideMenu and Toggle.SideMenuBtn then
+						Toggle.SideMenuBtn.Position = UDim2.new(1, -rightOffset - 10, 0.5, -11)
+						rightOffset = rightOffset + 10 + 6
+					end
+
+					if Toggle.HasKeybind and Toggle.KeybindBtn then
+						Toggle.KeybindBtn.Position = UDim2.new(1, -rightOffset - 26, 0.5, -9)
+						rightOffset = rightOffset + 26 + 6
+					end
+
+					Checkbox.Position = UDim2.new(1, -rightOffset - 18, 0.5, -9)
+					rightOffset = rightOffset + 18 + 5
+
+					Label.Size = UDim2.new(1, -rightOffset - 3, 1, 0)
+				end
+
+				function Toggle:CreateKeybind(opts)
+					opts = opts or {}
+					local defaultKey = opts.Default or nil
+					local keybindCallback = opts.Callback or function() end
+					local mode = opts.Mode or "toggle"
+
+					local Keybind = {}
+					Keybind.Value = defaultKey
+					Keybind.Mode = mode
+
+					Toggle.HasKeybind = true
+
+					local KeyBtn = Create("TextButton", {
+						Name = "Keybind",
+						BackgroundColor3 = Theme.Tertiary,
+						FontFace = Fonts.ComicNeue,
+						Text = defaultKey and defaultKey.Name:sub(1, 3):upper() or "-",
+						TextColor3 = Theme.TextDarker,
+						TextSize = 11,
+						Size = UDim2.new(0, 26, 0, 18),
+						Position = UDim2.new(1, -50, 0.5, -9),
+						ZIndex = 5,
+						Parent = ToggleFrame
+					})
+					AddCorner(KeyBtn, 4)
+					local KeyStroke = AddStroke(KeyBtn, Theme.Border)
+
+					Toggle.KeybindBtn = KeyBtn
+					RecalculatePositions()
+
+					local binding = false
+
+					KeyBtn.MouseEnter:Connect(function()
+						Tween(KeyStroke, {Color = Theme.Accent}, 0.1)
+					end)
+					KeyBtn.MouseLeave:Connect(function()
+						Tween(KeyStroke, {Color = Theme.Border}, 0.1)
+					end)
+
+					KeyBtn.MouseButton1Click:Connect(function()
+						if binding then return end
+						binding = true
+						KeyBtn.Text = "[...]"
+
+						local conn
+						conn = UserInputService.InputBegan:Connect(function(input, gpe)
+							if gpe then return end
+							if input.UserInputType == Enum.UserInputType.Keyboard then
+								Keybind.Value = input.KeyCode
+								KeyBtn.Text = input.KeyCode.Name:sub(1, 3):upper()
+								binding = false
+								conn:Disconnect()
+								keybindCallback(input.KeyCode)
+							end
+						end)
+					end)
+
+					UserInputService.InputBegan:Connect(function(input, gpe)
+						if gpe then return end
+						if Keybind.Value and input.KeyCode == Keybind.Value then
+							if mode == "toggle" then
+								Toggle.Value = not Toggle.Value
+								UpdateToggle()
+							elseif mode == "hold" then
+								Toggle.Value = true
+								UpdateToggle()
+							end
+							keybindCallback(Keybind.Value)
+						end
+					end)
+
+					if mode == "hold" then
+						UserInputService.InputEnded:Connect(function(input, gpe)
+							if Keybind.Value and input.KeyCode == Keybind.Value then
+								Toggle.Value = false
+								UpdateToggle()
+							end
+						end)
+					end
+
+					function Keybind:Set(key)
+						Keybind.Value = key
+						KeyBtn.Text = key and key.Name:sub(1, 3):upper() or "-"
+					end
+
+					function Keybind:SetMode(m)
+						Keybind.Mode = m
+						mode = m
+					end
+
+					Toggle.Keybind = Keybind
+					return Keybind
+				end
+
+				function Toggle:CreateSideMenu(name)
+					Toggle.HasSideMenu = true
+
+					local SideMenuBtn = Create("TextButton", {
+						Name = "SideMenuBtn",
+						BackgroundTransparency = 1,
+						FontFace = Fonts.Inconsolata,
+						Text = "+",
+						TextColor3 = Theme.TextDark,
+						TextSize = 16,
+						Size = UDim2.new(0, 10, 0, 22),
+						Position = UDim2.new(1, -70, 0.5, -11),
+						ZIndex = 5,
+						Parent = ToggleFrame
+					})
+					AddContextualStroke(SideMenuBtn)
+
+					Toggle.SideMenuBtn = SideMenuBtn
+					RecalculatePositions()
+
+					local sideMenu = CreateSideMenu({
+						Name = name or (toggleName .. " Settings"),
+						Button = SideMenuBtn
+					})
+
+					SideMenuBtn.MouseEnter:Connect(function()
+						Tween(SideMenuBtn, {TextColor3 = Theme.Text}, 0.1)
+					end)
+					SideMenuBtn.MouseLeave:Connect(function()
+						if not sideMenu.Open then
+							Tween(SideMenuBtn, {TextColor3 = Theme.TextDark}, 0.1)
+						end
+					end)
+
+					SideMenuBtn.MouseButton1Click:Connect(function()
+						if sideMenu.Open then
+							sideMenu.Close()
+							SideMenuBtn.Text = "+"
+							SideMenuBtn.TextColor3 = Theme.TextDark
+						else
+							sideMenu.Open_()
+							SideMenuBtn.Text = "-"
+							SideMenuBtn.TextColor3 = Theme.Text
+						end
+					end)
+
+					Toggle.SideMenu = sideMenu
+					return sideMenu
 				end
 
 				Toggle.Frame = ToggleFrame
-				Toggle.KeybindButton = KeybindBtn
 
 				if default then callback(default) end
 				task.defer(UpdateSectionSize)
 				return Toggle
 			end
-
-			function Section:AddSideMenu(element, name)
-				if not element or not element.KeybindButton then return end
-
-				local SideMenuBtn = Create("TextButton", {
-					Name = "SideMenu",
-					BackgroundTransparency = 1,
-					FontFace = Fonts.Inconsolata,
-					Text = "+",
-					TextColor3 = Theme.Text,
-					TextSize = 16,
-					Size = UDim2.new(0, 18, 0, 18),
-					Position = UDim2.new(1, -3, 0.5, -9),
-					ZIndex = 5,
-					Parent = element.Frame
-				})
-				AddContextualStroke(SideMenuBtn)
-
-				local sideMenu = CreateSideMenu({
-					Name = (name or "side menu"),
-					Button = SideMenuBtn
-				})
-
-				SideMenuBtn.MouseButton1Click:Connect(function()
-					if sideMenu.Open then
-						sideMenu.Close()
-					else
-						sideMenu.Open_()
-					end
-				end)
-
-				return sideMenu
-			end
-
+			
 			function Section:CreateDropdown(options)
 				options = options or {}
 				local dropdownName = options.Name or "Dropdown"
@@ -1428,6 +1788,169 @@ function Yerba:CreateWindow(title, subtitle, options)
 				callback(default)
 				task.defer(UpdateSectionSize)
 				return Slider
+			end
+
+			function Section:CreateKeybind(options)
+				options = options or {}
+				local keybindName = options.Name or "Keybind"
+				local default = options.Default or nil
+				local callback = options.Callback or function() end
+				local subtab = options.Subtab or Section.CurrentSubtab
+
+				local Keybind = {}
+				Keybind.Value = default
+
+				local parentContent
+				if Section.SubtabContents[subtab] then
+					parentContent = Section.SubtabContents[subtab].Content
+				else
+					parentContent = Section.Content
+				end
+
+				local KeybindFrame = Create("Frame", {
+					Name = keybindName,
+					BackgroundTransparency = 1,
+					Size = UDim2.new(1, 0, 0, 22),
+					Parent = parentContent
+				})
+
+				local Label = Create("TextLabel", {
+					Name = "Name",
+					BackgroundTransparency = 1,
+					FontFace = Fonts.ComicNeue,
+					Text = keybindName,
+					TextColor3 = Theme.Text,
+					TextSize = 14,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					Size = UDim2.new(1, -50, 1, 0),
+					Parent = KeybindFrame
+				})
+				AddContextualStroke(Label)
+
+				local KeyBtn = Create("TextButton", {
+					Name = "Key",
+					BackgroundColor3 = Theme.Tertiary,
+					FontFace = Fonts.ComicNeue,
+					Text = default and default.Name or "-",
+					TextColor3 = Theme.TextDarker,
+					TextSize = 13,
+					Size = UDim2.new(0, 45, 0, 20),
+					Position = UDim2.new(1, -45, 0.5, -10),
+					Parent = KeybindFrame
+				})
+				AddCorner(KeyBtn, 5)
+				local KeyStroke = AddStroke(KeyBtn, Theme.Border)
+
+				local binding = false
+
+				KeyBtn.MouseEnter:Connect(function()
+					Tween(KeyStroke, {Color = Theme.Accent}, 0.1)
+				end)
+				KeyBtn.MouseLeave:Connect(function()
+					Tween(KeyStroke, {Color = Theme.Border}, 0.1)
+				end)
+
+				KeyBtn.MouseButton1Click:Connect(function()
+					if binding then return end
+					binding = true
+					KeyBtn.Text = "[...]"
+
+					local conn
+					conn = UserInputService.InputBegan:Connect(function(input, gpe)
+						if gpe then return end
+						if input.UserInputType == Enum.UserInputType.Keyboard then
+							Keybind.Value = input.KeyCode
+							KeyBtn.Text = input.KeyCode.Name:sub(1, 4):upper()
+							binding = false
+							conn:Disconnect()
+							callback(input.KeyCode)
+						end
+					end)
+				end)
+
+				UserInputService.InputBegan:Connect(function(input, gpe)
+					if gpe then return end
+					if Keybind.Value and input.KeyCode == Keybind.Value then
+						callback(Keybind.Value)
+					end
+				end)
+
+				function Keybind:Set(key)
+					Keybind.Value = key
+					KeyBtn.Text = key and key.Name:sub(1, 4):upper() or "-"
+				end
+
+				Keybind.Frame = KeybindFrame
+				task.defer(UpdateSectionSize)
+				return Keybind
+			end
+
+			function Section:CreateParagraph(options)
+				options = options or {}
+				local title = options.Title or "nil"
+				local content = options.Content or "creater didnt added content"
+				local subtab = options.Subtab or Section.CurrentSubtab
+
+				local parentContent
+				if Section.SubtabContents[subtab] then
+					parentContent = Section.SubtabContents[subtab].Content
+				else
+					parentContent = Section.Content
+				end
+
+				local ParagraphFrame = Create("Frame", {
+					Name = title,
+					BackgroundColor3 = Theme.Tertiary,
+					BorderSizePixel = 0,
+					AutomaticSize = Enum.AutomaticSize.Y,
+					Size = UDim2.new(1, 0, 0, 0),
+					Parent = parentContent
+				})
+				AddCorner(ParagraphFrame, 5)
+				AddStroke(ParagraphFrame, Theme.Border)
+
+				local TitleLabel = Create("TextLabel", {
+					Name = "Title",
+					BackgroundTransparency = 1,
+					FontFace = Fonts.Inconsolata,
+					Text = title,
+					TextColor3 = Theme.Text,
+					TextSize = 14,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					Size = UDim2.new(1, -10, 0, 20),
+					Position = UDim2.new(0, 5, 0, 2),
+					Parent = ParagraphFrame
+				})
+				AddContextualStroke(TitleLabel)
+
+				local ContentLabel = Create("TextLabel", {
+					Name = "Content",
+					BackgroundTransparency = 1,
+					FontFace = Fonts.Inconsolata,
+					Text = content,
+					TextColor3 = Theme.TextDark,
+					TextSize = 13,
+					TextWrapped = true,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					TextYAlignment = Enum.TextYAlignment.Top,
+					AutomaticSize = Enum.AutomaticSize.Y,
+					Size = UDim2.new(1, -10, 0, 0),
+					Position = UDim2.new(0, 5, 0, 22),
+					Parent = ParagraphFrame
+				})
+
+				Create("UIPadding", {
+					PaddingBottom = UDim.new(0, 5),
+					Parent = ParagraphFrame
+				})
+
+				local Paragraph = {Frame = ParagraphFrame}
+
+				function Paragraph:SetTitle(t) TitleLabel.Text = t end
+				function Paragraph:SetContent(c) ContentLabel.Text = c end
+
+				task.defer(UpdateSectionSize)
+				return Paragraph
 			end
 
 			function Section:CreateColorPicker(options)
@@ -1790,7 +2313,13 @@ function Yerba:CreateWindow(title, subtitle, options)
 		end
 
 		if #Window.Tabs == 0 then
-			Window.ActiveTab = Tab
+			task.defer(function()
+				task.wait(0.1)
+				local btnPos = TabButton.AbsolutePosition
+				local containerPos = TabContainer.AbsolutePosition
+				TabHover.Position = UDim2.new(0, btnPos.X - containerPos.X + 60, 0, 40)
+				TabHover.Size = UDim2.new(0, TabButton.AbsoluteSize.X, 0, 2)
+			end)
 		end
 
 		table.insert(Window.Tabs, Tab)
@@ -1801,11 +2330,13 @@ function Yerba:CreateWindow(title, subtitle, options)
 		options = options or {}
 		local side = options.Side or "right"
 		local gap = options.Gap or 10
+		local linkedTab = options.Tab or nil
 		local onSpectate = options.OnSpectate or function() end
 		local onTeleport = options.OnTeleport or function() end
 
 		local PlayerList = {}
 		PlayerList.SelectedPlayer = nil
+		PlayerList.Tab = linkedTab
 
 		local PlayerListFrame = Create("Frame", {
 			Name = "Players",
@@ -1813,9 +2344,10 @@ function Yerba:CreateWindow(title, subtitle, options)
 			BorderSizePixel = 0,
 			ClipsDescendants = false,
 			Size = UDim2.new(0, 270, 0, 470),
+			Visible = false,
 			Parent = ScreenGui
 		})
-		AddCorner(PlayerListFrame, 4)
+		AddCorner(PlayerListFrame, 5)
 		AddStroke(PlayerListFrame, Theme.Border)
 
 		local function UpdatePosition()
@@ -1850,7 +2382,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 			Position = UDim2.new(0.039, 0, 0.086, 0),
 			Parent = PlayerListFrame
 		})
-		AddCorner(SearchContainer, 2)
+		AddCorner(SearchContainer, 4)
 		AddStroke(SearchContainer, Theme.Border)
 
 		Create("ImageLabel", {
@@ -1886,7 +2418,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 			Position = UDim2.new(0.035, 0, 0.163, 0),
 			Parent = PlayerListFrame
 		})
-		AddCorner(ListSection, 1)
+		AddCorner(ListSection, 4)
 		AddStroke(ListSection, Theme.Border)
 
 		local ListHeader = Create("TextLabel", {
@@ -1933,7 +2465,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 			Position = UDim2.new(0.035, 0, 0.647, 0),
 			Parent = PlayerListFrame
 		})
-		AddCorner(DetailSection, 1)
+		AddCorner(DetailSection, 4)
 		AddStroke(DetailSection, Theme.Border)
 
 		local DetailHeader = Create("TextLabel", {
@@ -2137,7 +2669,17 @@ function Yerba:CreateWindow(title, subtitle, options)
 		function PlayerList:Refresh() UpdatePlayers() end
 		function PlayerList:Toggle(visible) PlayerListFrame.Visible = visible end
 		function PlayerList:GetSelected() return PlayerList.SelectedPlayer end
-		function PlayerList:SetSide(newSide) side = newSide UpdatePosition() end
+		function PlayerList:SetSide(newSide) 
+			side = newSide 
+			UpdatePosition() 
+		end
+		function PlayerList:SetTab(tab)
+			PlayerList.Tab = tab
+			UpdatePlayerListsVisibility()
+		end
+
+		table.insert(Window.PlayerLists, PlayerList)
+		task.defer(UpdatePlayerListsVisibility)
 
 		return PlayerList
 	end
@@ -2185,7 +2727,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 			Position = UDim2.new(0, 10, 0, 10),
 			Parent = ScreenGui
 		})
-		AddCorner(Watermark, 6)
+		AddCorner(Watermark, 4)
 		AddStroke(Watermark, Color3.fromRGB(47, 61, 67))
 
 		Create("ImageLabel", {
@@ -2308,7 +2850,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 			Position = UDim2.new(1, -170, 0, 10),
 			Parent = ScreenGui
 		})
-		AddCorner(KeybindsFrame, 6)
+		AddCorner(KeybindsFrame, 4)
 		AddStroke(KeybindsFrame, Theme.BorderAccent)
 
 		local Header = Create("TextLabel", {
@@ -2390,6 +2932,9 @@ function Yerba:CreateWindow(title, subtitle, options)
 					Remove = function()
 						Lbl:Destroy()
 						task.defer(UpdateSize)
+					end,
+					Update = function(_, newKey, newMode)
+						Lbl.Text = string.format(" [%s] %s - %s", newMode or mode, kbName, newKey or key)
 					end
 				}
 			end,
@@ -2417,7 +2962,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 	return Window
 end
 
-local Window = Yerba:CreateWindow("Yerba", "v1.3", {
+local Window = Yerba:CreateWindow("Yerba", "v1.4", {
 	Width = 620,
 	Height = 480
 })
@@ -2429,9 +2974,14 @@ local Watermark = Window:CreateWatermark({
 
 local KeybindsDisplay = Window:CreateKeybindsDisplay()
 
+local CombatTab = Window:CreateTab("combat")
+local VisualsTab = Window:CreateTab("visuals")
+local MiscTab = Window:CreateTab("misc")
+
 local PlayerList = Window:CreatePlayerList({
 	Side = "right",
 	Gap = 10,
+	Tab = VisualsTab,
 	OnSpectate = function(player)
 		print("Spectating:", player.Name)
 	end,
@@ -2441,12 +2991,6 @@ local PlayerList = Window:CreatePlayerList({
 		end
 	end
 })
-
-PlayerList:SetSide("left")
-
-local CombatTab = Window:CreateTab("combat")
-local VisualsTab = Window:CreateTab("visuals")
-local MiscTab = Window:CreateTab("misc")
 
 local AimbotSection = CombatTab:CreateSection("aimbot", {"main", "settings", "fov"}, "left")
 
@@ -2459,7 +3003,33 @@ local AimbotToggle = AimbotSection:CreateToggle({
 	end
 })
 
-AimbotSection:AddSideMenu(AimbotToggle, "Aimbot Settings")
+local AimbotKeybind = AimbotToggle:CreateKeybind({
+	Default = Enum.KeyCode.X,
+	Mode = "toggle",
+	Callback = function(key)
+		print("Aimbot keybind:", key)
+	end
+})
+
+local AimbotSideMenu = AimbotToggle:CreateSideMenu("Aimbot Settings")
+AimbotSideMenu:CreateToggle({
+	Name = "Silent Aim",
+	Default = false,
+	Callback = function(v) print("Silent:", v) end
+})
+AimbotSideMenu:CreateDropdown({
+	Name = "Priority",
+	Items = {"Distance", "Health", "Threat"},
+	Default = "Distance",
+	Callback = function(v) print("Priority:", v) end
+})
+AimbotSideMenu:CreateSlider({
+	Name = "Prediction",
+	Min = 0,
+	Max = 100,
+	Default = 50,
+	Callback = function(v) print("Prediction:", v) end
+})
 
 local AimbotTarget = AimbotSection:CreateDropdown({
 	Name = "Target",
@@ -2483,24 +3053,20 @@ local AimbotSmooth = AimbotSection:CreateSlider({
 	end
 })
 
-local AimbotDistance = AimbotSection:CreateSlider({
-	Name = "Max Distance",
-	Min = 0,
-	Max = 500,
-	Default = 200,
-	Increment = 10,
-	Subtab = "settings",
-	Callback = function(value)
-		print("Max Distance:", value)
-	end
-})
-
 local ShowFOV = AimbotSection:CreateToggle({
 	Name = "Show FOV",
 	Default = true,
 	Subtab = "fov",
 	Callback = function(value)
 		print("Show FOV:", value)
+	end
+})
+
+local ShowFOVKeybind = ShowFOV:CreateKeybind({
+	Default = Enum.KeyCode.F,
+	Mode = "toggle",
+	Callback = function(key)
+		print("FOV Toggle Key:", key)
 	end
 })
 
@@ -2535,7 +3101,13 @@ local TriggerBot = TriggerSection:CreateToggle({
 	end
 })
 
-TriggerSection:AddSideMenu(TriggerBot, "Trigger Settings")
+TriggerBot:CreateKeybind({
+	Default = Enum.KeyCode.T,
+	Mode = "hold",
+	Callback = function(key)
+		print("Trigger key:", key)
+	end
+})
 
 local TriggerDelay = TriggerSection:CreateSlider({
 	Name = "Delay (ms)",
@@ -2557,6 +3129,11 @@ local PlayerESP = ESPSection:CreateToggle({
 	Callback = function(value)
 		print("Player ESP:", value)
 	end
+})
+
+PlayerESP:CreateKeybind({
+	Default = Enum.KeyCode.P,
+	Mode = "toggle"
 })
 
 local ShowNames = ESPSection:CreateToggle({
@@ -2632,6 +3209,11 @@ local ChamsEnabled = ChamsSection:CreateToggle({
 	end
 })
 
+ChamsEnabled:CreateKeybind({
+	Default = Enum.KeyCode.C,
+	Mode = "toggle"
+})
+
 local ChamsColor = ChamsSection:CreateColorPicker({
 	Name = "Color",
 	Default = Color3.fromRGB(0, 255, 0),
@@ -2664,6 +3246,11 @@ local SpeedHack = MovementSection:CreateToggle({
 			game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 16
 		end
 	end
+})
+
+SpeedHack:CreateKeybind({
+	Default = Enum.KeyCode.V,
+	Mode = "toggle"
 })
 
 local SpeedValue = MovementSection:CreateSlider({
@@ -2744,17 +3331,29 @@ local TeleportBtn = UtilitySection:CreateButton({
 	end
 })
 
-local InfoLabel = UtilitySection:CreateLabel("Made with Yerba UI v1.3")
+local InfoSection = MiscTab:CreateSection("Info", nil, "left")
 
-task.spawn(function()
-	wait(3)
-	PlayerESP:Set(true)
-end)
+local info = InfoSection:CreateParagraph({
+	Title = "About",
+	Content = "This is a cool script made with Yerba UI library."
+})
 
-task.spawn(function()
-	wait(7)
-	BoxColor:Set(Color3.fromRGB(0, 255, 255))
-end)
+local bind = InfoSection:CreateKeybind({
+	Name = "Toggle UI",
+	Default = Enum.KeyCode.RightShift,
+	Callback = function(key)
+		print("Key pressed:", key)
+	end
+})
+
+task.wait(2)
+info:SetContent("test !")
+
+local InfoLabel = UtilitySection:CreateLabel("Made with Yerba UI v1.4")
+
+KeybindsDisplay:AddKeybind("Aimbot", "X", "tog")
+KeybindsDisplay:AddKeybind("ESP", "P", "tog")
+KeybindsDisplay:AddKeybind("Trigger", "T", "hld")
 
 print("Yerba UI v" .. Yerba.Version .. " loaded successfully!")
 
