@@ -5,9 +5,7 @@
     original: yerba external
 
         ver: 1.4
-	- dragging
-	- fixed dot 
-	- not supported for mobile!
+	-- nothing new :(
 
 --]]
 
@@ -17,7 +15,6 @@ local Yerba = {
 	Windows = {},
 	Scale = {
 		Window = UDim2.new(0, 620, 0, 480),
-		Mobile = UDim2.new(0, 450, 0, 375),
 		TabOpen = 185,
 		TabClose = 85,
 		TopBar = 50,
@@ -836,6 +833,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 			local max = opts.Max or 100
 			local default = opts.Default or min
 			local increment = opts.Increment or 1
+			local suffix = opts.Suffix or ""
 			local callback = opts.Callback or function() end
 
 			local Slider = {}
@@ -844,7 +842,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 			local SliderFrame = Create("Frame", {
 				Name = sliderName,
 				BackgroundTransparency = 1,
-				Size = UDim2.new(1, 0, 0, 28),
+				Size = UDim2.new(1, 0, 0, 32),
 				ZIndex = 102,
 				Parent = MenuContent
 			})
@@ -857,32 +855,33 @@ function Yerba:CreateWindow(title, subtitle, options)
 				TextColor3 = Theme.Text,
 				TextSize = 12,
 				TextXAlignment = Enum.TextXAlignment.Left,
-				Size = UDim2.new(0.7, 0, 0, 12),
+				Size = UDim2.new(0.6, 0, 0, 12),
 				ZIndex = 103,
 				Parent = SliderFrame
 			})
 			AddContextualStroke(Label)
 
-			local ValueLbl = Create("TextLabel", {
-				Name = "Value",
-				BackgroundTransparency = 1,
+			local ValueBox = Create("TextBox", {
+				Name = "ValueBox",
+				BackgroundColor3 = Theme.Tertiary,
 				FontFace = Fonts.Inconsolata,
-				Text = tostring(default),
+				Text = tostring(default) .. suffix,
 				TextColor3 = Theme.TextDarker,
-				TextSize = 11,
-				TextXAlignment = Enum.TextXAlignment.Right,
-				Size = UDim2.new(0.3, 0, 0, 12),
-				Position = UDim2.new(0.7, 0, 0, 0),
+				TextSize = 10,
+				Size = UDim2.new(0, 35, 0, 12),
+				Position = UDim2.new(1, -35, 0, 0),
 				ZIndex = 103,
 				Parent = SliderFrame
 			})
+			AddCorner(ValueBox, 3)
+			local ValueBoxStroke = AddStroke(ValueBox, Theme.Border)
 
 			local SliderBG = Create("Frame", {
 				Name = "Background",
 				BackgroundColor3 = Theme.Tertiary,
 				BorderSizePixel = 0,
 				Size = UDim2.new(1, 0, 0, 5),
-				Position = UDim2.new(0, 0, 0, 16),
+				Position = UDim2.new(0, 0, 0, 18),
 				ZIndex = 103,
 				Parent = SliderFrame
 			})
@@ -899,16 +898,38 @@ function Yerba:CreateWindow(title, subtitle, options)
 			})
 			AddCorner(SliderFill, 3)
 
-			local function UpdateSlider(input)
-				local percent = math.clamp((input.Position.X - SliderBG.AbsolutePosition.X) / SliderBG.AbsoluteSize.X, 0, 1)
-				local value = min + (percent * (max - min))
+			local SliderKnob = Create("Frame", {
+				Name = "Knob",
+				BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+				BorderSizePixel = 0,
+				Size = UDim2.new(0, 10, 0, 10),
+				Position = UDim2.new((default - min) / (max - min), -5, 0.5, -5),
+				ZIndex = 105,
+				Parent = SliderBG
+			})
+			AddCorner(SliderKnob, 10)
+			local KnobStroke = AddStroke(SliderKnob, Theme.Border)
+
+			local function UpdateSlider(value, skipCallback)
+				value = math.clamp(value, min, max)
 				value = math.floor(value / increment + 0.5) * increment
 				value = math.clamp(value, min, max)
 
 				Slider.Value = value
-				SliderFill.Size = UDim2.new((value - min) / (max - min), 0, 1, 0)
-				ValueLbl.Text = tostring(value)
-				callback(value)
+				local percent = (value - min) / (max - min)
+				SliderFill.Size = UDim2.new(percent, 0, 1, 0)
+				SliderKnob.Position = UDim2.new(percent, -5, 0.5, -5)
+				ValueBox.Text = tostring(value) .. suffix
+
+				if not skipCallback then
+					callback(value)
+				end
+			end
+
+			local function UpdateFromInput(input)
+				local percent = math.clamp((input.Position.X - SliderBG.AbsolutePosition.X) / SliderBG.AbsoluteSize.X, 0, 1)
+				local value = min + (percent * (max - min))
+				UpdateSlider(value)
 			end
 
 			local sliding = false
@@ -916,28 +937,82 @@ function Yerba:CreateWindow(title, subtitle, options)
 			SliderBG.InputBegan:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.MouseButton1 then
 					sliding = true
-					UpdateSlider(input)
+					UpdateFromInput(input)
+					Tween(SliderKnob, {Size = UDim2.new(0, 12, 0, 12), Position = UDim2.new(SliderKnob.Position.X.Scale, -6, 0.5, -6)}, 0.1)
+					Tween(KnobStroke, {Color = Theme.Accent}, 0.1)
 				end
 			end)
 
 			SliderBG.InputEnded:Connect(function(input)
 				if input.UserInputType == Enum.UserInputType.MouseButton1 then
 					sliding = false
+					local percent = (Slider.Value - min) / (max - min)
+					Tween(SliderKnob, {Size = UDim2.new(0, 10, 0, 10), Position = UDim2.new(percent, -5, 0.5, -5)}, 0.1)
+					Tween(KnobStroke, {Color = Theme.Border}, 0.1)
+				end
+			end)
+
+			SliderKnob.InputBegan:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 then
+					sliding = true
+					Tween(SliderKnob, {Size = UDim2.new(0, 12, 0, 12), Position = UDim2.new(SliderKnob.Position.X.Scale, -6, 0.5, -6)}, 0.1)
+					Tween(KnobStroke, {Color = Theme.Accent}, 0.1)
+				end
+			end)
+
+			SliderKnob.InputEnded:Connect(function(input)
+				if input.UserInputType == Enum.UserInputType.MouseButton1 then
+					sliding = false
+					local percent = (Slider.Value - min) / (max - min)
+					Tween(SliderKnob, {Size = UDim2.new(0, 10, 0, 10), Position = UDim2.new(percent, -5, 0.5, -5)}, 0.1)
+					Tween(KnobStroke, {Color = Theme.Border}, 0.1)
+				end
+			end)
+
+			SliderBG.MouseEnter:Connect(function()
+				Tween(SliderFill, {BackgroundColor3 = Theme.Accent}, 0.1)
+			end)
+
+			SliderBG.MouseLeave:Connect(function()
+				if not sliding then
+					Tween(SliderFill, {BackgroundColor3 = Theme.Blue}, 0.1)
 				end
 			end)
 
 			UserInputService.InputChanged:Connect(function(input)
 				if sliding and input.UserInputType == Enum.UserInputType.MouseMovement then
-					UpdateSlider(input)
+					UpdateFromInput(input)
 				end
 			end)
 
+			ValueBox.MouseEnter:Connect(function()
+				Tween(ValueBoxStroke, {Color = Theme.Accent}, 0.1)
+			end)
+
+			ValueBox.MouseLeave:Connect(function()
+				Tween(ValueBoxStroke, {Color = Theme.Border}, 0.1)
+			end)
+
+			ValueBox.FocusLost:Connect(function(enterPressed)
+				local text = ValueBox.Text:gsub(suffix, "")
+				local num = tonumber(text)
+				if num then
+					UpdateSlider(num)
+				else
+					ValueBox.Text = tostring(Slider.Value) .. suffix
+				end
+			end)
+
+			ValueBox.Focused:Connect(function()
+				ValueBox.Text = tostring(Slider.Value)
+			end)
+
 			function Slider:Set(value)
-				value = math.clamp(value, min, max)
-				Slider.Value = value
-				SliderFill.Size = UDim2.new((value - min) / (max - min), 0, 1, 0)
-				ValueLbl.Text = tostring(value)
-				callback(value)
+				UpdateSlider(value)
+			end
+
+			function Slider:Get()
+				return Slider.Value
 			end
 
 			Slider.Frame = SliderFrame
@@ -1351,6 +1426,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 					local Keybind = {}
 					Keybind.Value = defaultKey
 					Keybind.Mode = mode
+					Keybind.Active = false
 
 					Toggle.HasKeybind = true
 
@@ -1359,32 +1435,202 @@ function Yerba:CreateWindow(title, subtitle, options)
 						BackgroundColor3 = Theme.Tertiary,
 						FontFace = Fonts.ComicNeue,
 						Text = defaultKey and defaultKey.Name:sub(1, 3):upper() or "-",
-						TextColor3 = Theme.TextDarker,
-						TextSize = 11,
+						TextColor3 = Theme.Text,
+						TextSize = 13,
 						Size = UDim2.new(0, 26, 0, 18),
 						Position = UDim2.new(1, -50, 0.5, -9),
 						ZIndex = 5,
 						Parent = ToggleFrame
 					})
 					AddCorner(KeyBtn, 4)
-					local KeyStroke = AddStroke(KeyBtn, Theme.Border)
+					local KeyStroke = AddStroke(KeyBtn, Theme.Stroke, 1)
 
 					Toggle.KeybindBtn = KeyBtn
 					RecalculatePositions()
 
-					local binding = false
+					local KeybindMenu = Create("Frame", {
+						Name = "KeybindMenu",
+						BackgroundColor3 = Theme.Tertiary,
+						BackgroundTransparency = 0,
+						BorderSizePixel = 0,
+						Size = UDim2.new(0, 120, 0, 0),
+						ClipsDescendants = true,
+						Visible = false,
+						ZIndex = 150,
+						Parent = ScreenGui
+					})
+					AddCorner(KeybindMenu, 4)
+					AddStroke(KeybindMenu, Theme.Stroke, 1)
 
-					KeyBtn.MouseEnter:Connect(function()
-						Tween(KeyStroke, {Color = Theme.Accent}, 0.1)
-					end)
-					KeyBtn.MouseLeave:Connect(function()
-						Tween(KeyStroke, {Color = Theme.Border}, 0.1)
-					end)
+					local MenuHeader = Create("Frame", {
+						Name = "Header",
+						BackgroundTransparency = 1,
+						Size = UDim2.new(1, 0, 0, 24),
+						ZIndex = 151,
+						Parent = KeybindMenu
+					})
+
+					local MenuTitle = Create("TextLabel", {
+						Name = "Title",
+						BackgroundTransparency = 1,
+						FontFace = Fonts.ComicNeue,
+						Text = "keybind mode",
+						TextColor3 = Theme.Text,
+						TextSize = 11,
+						Size = UDim2.new(1, 0, 1, 0),
+						ZIndex = 152,
+						Parent = MenuHeader
+					})
+					AddContextualStroke(MenuTitle)
+
+					AddGradientLine(MenuHeader, UDim2.new(0, 0, 1, 0), UDim2.new(1, 0, 0, 1))
+
+					local MenuContent = Create("Frame", {
+						Name = "Content",
+						BackgroundTransparency = 1,
+						Size = UDim2.new(1, -8, 1, -30),
+						Position = UDim2.new(0, 4, 0, 28),
+						ZIndex = 151,
+						Parent = KeybindMenu
+					})
+
+					Create("UIListLayout", {
+						Padding = UDim.new(0, 4),
+						SortOrder = Enum.SortOrder.LayoutOrder,
+						Parent = MenuContent
+					})
+
+					Create("UIPadding", {
+						PaddingBottom = UDim.new(0, 4),
+						Parent = MenuContent
+					})
+
+					local modes = {"Always", "Toggle", "Hold"}
+					local modeButtons = {}
+
+					local menuOpen = false
+
+					local function UpdateModeButtons()
+						for modeName, btnData in pairs(modeButtons) do
+							if modeName:lower() == Keybind.Mode then
+								Tween(btnData.Stroke, {Color = Theme.AccentBlue}, 0.1)
+								Tween(btnData.Label, {TextColor3 = Theme.Text}, 0.1)
+							else
+								Tween(btnData.Stroke, {Color = Theme.Border}, 0.1)
+								Tween(btnData.Label, {TextColor3 = Theme.TextDark}, 0.1)
+							end
+						end
+					end
+
+					local function CloseKeybindMenu()
+						if not menuOpen then return end
+						menuOpen = false
+						Tween(KeybindMenu, {Size = UDim2.new(0, 120, 0, 0)}, 0.15)
+						task.delay(0.15, function()
+							KeybindMenu.Visible = false
+						end)
+					end
+
+					local function OpenKeybindMenu()
+						if menuOpen then
+							CloseKeybindMenu()
+							return
+						end
+
+						CloseAllPopups()
+						menuOpen = true
+
+						local btnPos = KeyBtn.AbsolutePosition
+						local btnSize = KeyBtn.AbsoluteSize
+						local screenSize = workspace.CurrentCamera.ViewportSize
+
+						local menuX = btnPos.X + btnSize.X + 5
+						local menuY = btnPos.Y - 5
+
+						if menuX + 120 > screenSize.X then
+							menuX = btnPos.X - 125
+						end
+
+						KeybindMenu.Position = UDim2.new(0, menuX, 0, menuY)
+						KeybindMenu.Size = UDim2.new(0, 120, 0, 0)
+						KeybindMenu.Visible = true
+						UpdateModeButtons()
+
+						Tween(KeybindMenu, {Size = UDim2.new(0, 120, 0, 96)}, 0.2, Enum.EasingStyle.Back, Enum.EasingDirection.Out)
+
+						table.insert(Window.OpenKeybindMenus, {Close = CloseKeybindMenu})
+					end
+
+					for i, modeName in ipairs(modes) do
+						local ModeFrame = Create("Frame", {
+							Name = modeName,
+							BackgroundColor3 = Theme.Secondary,
+							BackgroundTransparency = 0,
+							Size = UDim2.new(1, 0, 0, 20),
+							LayoutOrder = i,
+							ZIndex = 152,
+							Parent = MenuContent
+						})
+						AddCorner(ModeFrame, 4)
+						local ModeStroke = AddStroke(ModeFrame, modeName:lower() == mode and Theme.AccentBlue or Theme.Border, 1)
+
+						local ModeLabel = Create("TextLabel", {
+							Name = "Label",
+							BackgroundTransparency = 1,
+							FontFace = Fonts.ComicNeue,
+							Text = modeName,
+							TextColor3 = modeName:lower() == mode and Theme.Text or Theme.TextDark,
+							TextSize = 12,
+							Size = UDim2.new(1, 0, 1, 0),
+							ZIndex = 153,
+							Parent = ModeFrame
+						})
+						AddContextualStroke(ModeLabel)
+
+						local ModeBtn = Create("TextButton", {
+							Name = "Button",
+							BackgroundTransparency = 1,
+							Text = "",
+							Size = UDim2.new(1, 0, 1, 0),
+							ZIndex = 154,
+							Parent = ModeFrame
+						})
+
+						modeButtons[modeName] = {Frame = ModeFrame, Stroke = ModeStroke, Label = ModeLabel}
+
+						ModeBtn.MouseEnter:Connect(function()
+							if modeName:lower() ~= Keybind.Mode then
+								Tween(ModeStroke, {Color = Theme.Accent}, 0.1)
+							end
+						end)
+
+						ModeBtn.MouseLeave:Connect(function()
+							if modeName:lower() ~= Keybind.Mode then
+								Tween(ModeStroke, {Color = Theme.Border}, 0.1)
+							end
+						end)
+
+						ModeBtn.MouseButton1Click:Connect(function()
+							Keybind.Mode = modeName:lower()
+							mode = modeName:lower()
+							UpdateModeButtons()
+
+							if mode == "always" then
+								Toggle.Value = true
+								UpdateToggle()
+							end
+
+							CloseKeybindMenu()
+						end)
+					end
+
+					local binding = false
 
 					KeyBtn.MouseButton1Click:Connect(function()
 						if binding then return end
 						binding = true
 						KeyBtn.Text = "[...]"
+						Tween(KeyStroke, {Color = Theme.Enabled}, 0.1)
 
 						local conn
 						conn = UserInputService.InputBegan:Connect(function(input, gpe)
@@ -1394,18 +1640,23 @@ function Yerba:CreateWindow(title, subtitle, options)
 								KeyBtn.Text = input.KeyCode.Name:sub(1, 3):upper()
 								binding = false
 								conn:Disconnect()
+								Tween(KeyStroke, {Color = Theme.AccentBlue}, 0.1)
 								keybindCallback(input.KeyCode)
 							end
 						end)
 					end)
 
+					KeyBtn.MouseButton2Click:Connect(function()
+						OpenKeybindMenu()
+					end)
+
 					UserInputService.InputBegan:Connect(function(input, gpe)
 						if gpe then return end
 						if Keybind.Value and input.KeyCode == Keybind.Value then
-							if mode == "toggle" then
+							if Keybind.Mode == "toggle" then
 								Toggle.Value = not Toggle.Value
 								UpdateToggle()
-							elseif mode == "hold" then
+							elseif Keybind.Mode == "hold" then
 								Toggle.Value = true
 								UpdateToggle()
 							end
@@ -1413,14 +1664,14 @@ function Yerba:CreateWindow(title, subtitle, options)
 						end
 					end)
 
-					if mode == "hold" then
-						UserInputService.InputEnded:Connect(function(input, gpe)
-							if Keybind.Value and input.KeyCode == Keybind.Value then
+					UserInputService.InputEnded:Connect(function(input, gpe)
+						if Keybind.Value and input.KeyCode == Keybind.Value then
+							if Keybind.Mode == "hold" then
 								Toggle.Value = false
 								UpdateToggle()
 							end
-						end)
-					end
+						end
+					end)
 
 					function Keybind:Set(key)
 						Keybind.Value = key
@@ -1428,8 +1679,18 @@ function Yerba:CreateWindow(title, subtitle, options)
 					end
 
 					function Keybind:SetMode(m)
-						Keybind.Mode = m
-						mode = m
+						Keybind.Mode = m:lower()
+						mode = m:lower()
+						UpdateModeButtons()
+
+						if mode == "always" then
+							Toggle.Value = true
+							UpdateToggle()
+						end
+					end
+
+					function Keybind:GetMode()
+						return Keybind.Mode
 					end
 
 					Toggle.Keybind = Keybind
@@ -1625,9 +1886,15 @@ function Yerba:CreateWindow(title, subtitle, options)
 							Text = item,
 							TextColor3 = Theme.Text,
 							TextSize = 13,
+							TextXAlignment = Enum.TextXAlignment.Left,
 							Size = UDim2.new(1, 0, 0, 26),
 							ZIndex = 52,
 							Parent = ListScroll
+						})
+
+						Create("UIPadding", {
+							PaddingLeft = UDim.new(0, 8),
+							Parent = ItemBtn
 						})
 
 						ItemBtn.MouseEnter:Connect(function()
@@ -1991,6 +2258,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 				local max = options.Max or 100
 				local default = options.Default or min
 				local increment = options.Increment or 1
+				local suffix = options.Suffix or ""
 				local callback = options.Callback or function() end
 				local subtab = options.Subtab or Section.CurrentSubtab
 
@@ -2021,26 +2289,27 @@ function Yerba:CreateWindow(title, subtitle, options)
 				})
 				AddContextualStroke(Label)
 
-				local ValueLbl = Create("TextLabel", {
-					Name = "Value",
-					BackgroundTransparency = 1,
+				local ValueBox = Create("TextBox", {
+					Name = "ValueBox",
+					BackgroundColor3 = Theme.Tertiary,
 					FontFace = Fonts.Inconsolata,
-					Text = tostring(default),
+					Text = tostring(default) .. suffix,
 					TextColor3 = Theme.TextDarker,
-					TextSize = 13,
-					TextXAlignment = Enum.TextXAlignment.Right,
-					Size = UDim2.new(0.3, 0, 0, 16),
-					Position = UDim2.new(0.7, 0, 0, 0),
+					TextSize = 12,
+					Size = UDim2.new(0, 40, 0, 16),
+					Position = UDim2.new(1, -42, 0, 0),
 					ZIndex = 5,
 					Parent = SliderFrame
 				})
+				AddCorner(ValueBox, 4)
+				local ValueBoxStroke = AddStroke(ValueBox, Theme.Border)
 
 				local SliderBG = Create("Frame", {
 					Name = "Background",
 					BackgroundColor3 = Theme.Tertiary,
 					BorderSizePixel = 0,
 					Size = UDim2.new(1, 0, 0, 6),
-					Position = UDim2.new(0, 0, 0, 20),
+					Position = UDim2.new(0, 0, 0, 22),
 					ZIndex = 5,
 					Parent = SliderFrame
 				})
@@ -2057,16 +2326,38 @@ function Yerba:CreateWindow(title, subtitle, options)
 				})
 				AddCorner(SliderFill, 4)
 
-				local function UpdateSlider(input)
-					local percent = math.clamp((input.Position.X - SliderBG.AbsolutePosition.X) / SliderBG.AbsoluteSize.X, 0, 1)
-					local value = min + (percent * (max - min))
+				local SliderKnob = Create("Frame", {
+					Name = "Knob",
+					BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+					BorderSizePixel = 0,
+					Size = UDim2.new(0, 12, 0, 12),
+					Position = UDim2.new((default - min) / (max - min), -6, 0.5, -6),
+					ZIndex = 7,
+					Parent = SliderBG
+				})
+				AddCorner(SliderKnob, 10)
+				local KnobStroke = AddStroke(SliderKnob, Theme.Border)
+
+				local function UpdateSlider(value, skipCallback)
+					value = math.clamp(value, min, max)
 					value = math.floor(value / increment + 0.5) * increment
 					value = math.clamp(value, min, max)
 
 					Slider.Value = value
-					SliderFill.Size = UDim2.new((value - min) / (max - min), 0, 1, 0)
-					ValueLbl.Text = tostring(value)
-					callback(value)
+					local percent = (value - min) / (max - min)
+					SliderFill.Size = UDim2.new(percent, 0, 1, 0)
+					SliderKnob.Position = UDim2.new(percent, -6, 0.5, -6)
+					ValueBox.Text = tostring(value) .. suffix
+
+					if not skipCallback then
+						callback(value)
+					end
+				end
+
+				local function UpdateFromInput(input)
+					local percent = math.clamp((input.Position.X - SliderBG.AbsolutePosition.X) / SliderBG.AbsoluteSize.X, 0, 1)
+					local value = min + (percent * (max - min))
+					UpdateSlider(value)
 				end
 
 				local sliding = false
@@ -2074,28 +2365,92 @@ function Yerba:CreateWindow(title, subtitle, options)
 				SliderBG.InputBegan:Connect(function(input)
 					if input.UserInputType == Enum.UserInputType.MouseButton1 then
 						sliding = true
-						UpdateSlider(input)
+						UpdateFromInput(input)
+						Tween(SliderKnob, {Size = UDim2.new(0, 14, 0, 14), Position = UDim2.new(SliderKnob.Position.X.Scale, -7, 0.5, -7)}, 0.1)
+						Tween(KnobStroke, {Color = Theme.Accent}, 0.1)
 					end
 				end)
 
 				SliderBG.InputEnded:Connect(function(input)
 					if input.UserInputType == Enum.UserInputType.MouseButton1 then
 						sliding = false
+						local percent = (Slider.Value - min) / (max - min)
+						Tween(SliderKnob, {Size = UDim2.new(0, 12, 0, 12), Position = UDim2.new(percent, -6, 0.5, -6)}, 0.1)
+						Tween(KnobStroke, {Color = Theme.Border}, 0.1)
+					end
+				end)
+
+				SliderKnob.InputBegan:Connect(function(input)
+					if input.UserInputType == Enum.UserInputType.MouseButton1 then
+						sliding = true
+						Tween(SliderKnob, {Size = UDim2.new(0, 14, 0, 14), Position = UDim2.new(SliderKnob.Position.X.Scale, -7, 0.5, -7)}, 0.1)
+						Tween(KnobStroke, {Color = Theme.Accent}, 0.1)
+					end
+				end)
+
+				SliderKnob.InputEnded:Connect(function(input)
+					if input.UserInputType == Enum.UserInputType.MouseButton1 then
+						sliding = false
+						local percent = (Slider.Value - min) / (max - min)
+						Tween(SliderKnob, {Size = UDim2.new(0, 12, 0, 12), Position = UDim2.new(percent, -6, 0.5, -6)}, 0.1)
+						Tween(KnobStroke, {Color = Theme.Border}, 0.1)
+					end
+				end)
+
+				SliderBG.MouseEnter:Connect(function()
+					Tween(SliderFill, {BackgroundColor3 = Theme.Accent}, 0.1)
+				end)
+
+				SliderBG.MouseLeave:Connect(function()
+					if not sliding then
+						Tween(SliderFill, {BackgroundColor3 = Theme.Blue}, 0.1)
 					end
 				end)
 
 				UserInputService.InputChanged:Connect(function(input)
 					if sliding and input.UserInputType == Enum.UserInputType.MouseMovement then
-						UpdateSlider(input)
+						UpdateFromInput(input)
 					end
 				end)
 
+				ValueBox.MouseEnter:Connect(function()
+					Tween(ValueBoxStroke, {Color = Theme.Accent}, 0.1)
+				end)
+
+				ValueBox.MouseLeave:Connect(function()
+					Tween(ValueBoxStroke, {Color = Theme.Border}, 0.1)
+				end)
+
+				ValueBox.FocusLost:Connect(function(enterPressed)
+					local text = ValueBox.Text:gsub(suffix, "")
+					local num = tonumber(text)
+					if num then
+						UpdateSlider(num)
+					else
+						ValueBox.Text = tostring(Slider.Value) .. suffix
+					end
+				end)
+
+				ValueBox.Focused:Connect(function()
+					ValueBox.Text = tostring(Slider.Value)
+				end)
+
 				function Slider:Set(value)
-					value = math.clamp(value, min, max)
-					Slider.Value = value
-					SliderFill.Size = UDim2.new((value - min) / (max - min), 0, 1, 0)
-					ValueLbl.Text = tostring(value)
-					callback(value)
+					UpdateSlider(value)
+				end
+
+				function Slider:Get()
+					return Slider.Value
+				end
+
+				function Slider:SetMin(newMin)
+					min = newMin
+					UpdateSlider(Slider.Value, true)
+				end
+
+				function Slider:SetMax(newMax)
+					max = newMax
+					UpdateSlider(Slider.Value, true)
 				end
 
 				Slider.Frame = SliderFrame
@@ -3230,7 +3585,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 			Position = UDim2.new(1, -170, 0, 10),
 			Parent = ScreenGui
 		})
-		AddCorner(KeybindsFrame, 4)
+		AddCorner(KeybindsFrame, 2)
 		AddStroke(KeybindsFrame, Theme.BorderAccent)
 
 		local Header = Create("TextLabel", {
