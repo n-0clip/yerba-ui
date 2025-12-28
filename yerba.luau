@@ -92,19 +92,30 @@ local function Tween(instance, properties, duration, easingStyle, easingDirectio
 end
 
 local function AddCorner(parent, radius)
-	return Create("UICorner", {
-		CornerRadius = UDim.new(0, radius or 6),
-		Parent = parent
-	})
+    return Create("UICorner", {
+        CornerRadius = UDim.new(0, radius or 6),
+        Parent = parent
+    })
 end
 
-local function AddStroke(parent, color, thickness, mode)
-	return Create("UIStroke", {
-		Color = color or Theme.Border,
-		Thickness = thickness or 1,
-		ApplyStrokeMode = mode or Enum.ApplyStrokeMode.Border,
-		Parent = parent
-	})
+local function AddStroke(parent, color, thickness)
+    if not parent then return end
+    
+    local filler = Instance.new("UIStroke")
+    filler.Color = Theme.Stroke
+    filler.Thickness = (thickness or 0.75) + 1
+    filler.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    filler.LineJoinMode = Enum.LineJoinMode.Round
+    filler.Parent = parent
+    
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = color or Theme.Border
+    stroke.Thickness = thickness or 1
+    stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    stroke.LineJoinMode = Enum.LineJoinMode.Round
+    stroke.Parent = parent
+    
+    return stroke
 end
 
 local function AddContextualStroke(parent)
