@@ -260,6 +260,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 
 	local WINDOW_WIDTH = options.Width or Yerba.Scale.Window.X.Offset
 	local WINDOW_HEIGHT = options.Height or Yerba.Scale.Window.Y.Offset
+	local LOGO = options.Logo or Yerba.Logo
 	local TOPBAR_HEIGHT = Yerba.Scale.TopBar
 	local SECTION_WIDTH = Yerba.Scale.SectionWidth
 	local SECTION_GAP = Yerba.Scale.SectionGap
@@ -345,7 +346,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 	Create("ImageLabel", {
 		Name = "Icon",
 		BackgroundTransparency = 1,
-		Image = Yerba.Logo,
+		Image = LOGO,
 		Size = UDim2.new(0, 45, 0, 45),
 		Position = UDim2.new(0, 3, 0.5, -22),
 		ZIndex = 2,
