@@ -1436,11 +1436,13 @@ function Yerba:CreateWindow(title, subtitle, options)
 					local defaultKey = opts.Default or nil
 					local keybindCallback = opts.Callback or function() end
 					local mode = opts.Mode or "toggle"
+                    local onPressCallback = opts.OnPress or function() end
 
 					local Keybind = {}
 					Keybind.Value = defaultKey
 					Keybind.Mode = mode
 					Keybind.Active = false
+                    Keybind.Pressed = false
 
 					Toggle.HasKeybind = true
 
@@ -1649,13 +1651,16 @@ function Yerba:CreateWindow(title, subtitle, options)
 						local conn
 						conn = UserInputService.InputBegan:Connect(function(input, gpe)
 							if gpe then return end
+							if binding then return end
 							if input.UserInputType == Enum.UserInputType.Keyboard then
 								Keybind.Value = input.KeyCode
 								KeyBtn.Text = input.KeyCode.Name:sub(1, 3):upper()
 								conn:Disconnect()
-						       	binding = false
 								Tween(KeyStroke, {Color = Theme.AccentBlue}, 0.1)
 								keybindCallback(input.KeyCode)
+						        task.delay(0.1, function()
+						            binding = false
+						        end)
 							end
 						end)
 					end)
@@ -1666,8 +1671,11 @@ function Yerba:CreateWindow(title, subtitle, options)
 
 					UserInputService.InputBegan:Connect(function(input, gpe)
 						if gpe then return end
+						if binding then return end
 						if Keybind.Value and input.KeyCode == Keybind.Value then
-							if Keybind.Mode == "toggle" then
+							Keybind.Pressed = true
+                            
+                            if Keybind.Mode == "toggle" then
 								-- Toggle.Value = not Toggle.Value -- im dumb lmao
 								UpdateToggle()
 							elseif Keybind.Mode == "hold" then
@@ -1675,13 +1683,19 @@ function Yerba:CreateWindow(title, subtitle, options)
 								UpdateToggle()
 							end
 							keybindCallback(Keybind.Value)
+
+                            if Toggle.Value then
+                                onPressCallback(Keybind.Value, Toggle.Value)
+                            end
 						end
 					end)
 
 					UserInputService.InputEnded:Connect(function(input, gpe)
 						if Keybind.Value and input.KeyCode == Keybind.Value then
-							if Keybind.Mode == "hold" then
-								-- Toggle.Value = false -- idk
+							Keybind.Pressed = false
+                            
+                            if Keybind.Mode == "hold" then
+								Toggle.Value = false
 								UpdateToggle()
 							end
 						end
@@ -1692,13 +1706,21 @@ function Yerba:CreateWindow(title, subtitle, options)
 						KeyBtn.Text = key and key.Name:sub(1, 3):upper() or "-"
 					end
 
+                    function Keybind:IsPressed()
+                        return Keybind.Pressed
+                    end
+
+                    function Keybind:SetOnPress(callback)
+                        onPressCallback = callback or function() end
+                    end
+
 					function Keybind:SetMode(m)
 						Keybind.Mode = m:lower()
 						mode = m:lower()
 						UpdateModeButtons()
 
 						if mode == "always" then
-							--Toggle.Value = true
+							Toggle.Value = true
 							UpdateToggle()
 						end
 					end
@@ -2562,7 +2584,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 				function Keybind:Set(key)
 					Keybind.Value = key
 					KeyBtn.Text = key and key.Name:sub(1, 4):upper() or "-"
-				end
+				end 
 
 				Keybind.Frame = KeybindFrame
 				task.defer(UpdateSectionSize)
