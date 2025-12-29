@@ -1653,11 +1653,9 @@ function Yerba:CreateWindow(title, subtitle, options)
 								Keybind.Value = input.KeyCode
 								KeyBtn.Text = input.KeyCode.Name:sub(1, 3):upper()
 								conn:Disconnect()
+						       	binding = false
 								Tween(KeyStroke, {Color = Theme.AccentBlue}, 0.1)
 								keybindCallback(input.KeyCode)
-						        task.delay(0.1, function()
-						            binding = false
-						        end)
 							end
 						end)
 					end)
@@ -1683,7 +1681,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 					UserInputService.InputEnded:Connect(function(input, gpe)
 						if Keybind.Value and input.KeyCode == Keybind.Value then
 							if Keybind.Mode == "hold" then
-								Toggle.Value = false
+								-- Toggle.Value = false -- idk
 								UpdateToggle()
 							end
 						end
@@ -1700,7 +1698,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 						UpdateModeButtons()
 
 						if mode == "always" then
-							Toggle.Value = true
+							--Toggle.Value = true
 							UpdateToggle()
 						end
 					end
