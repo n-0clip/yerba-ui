@@ -1649,7 +1649,6 @@ function Yerba:CreateWindow(title, subtitle, options)
 						local conn
 						conn = UserInputService.InputBegan:Connect(function(input, gpe)
 							if gpe then return end
-							if binding then return end
 							if input.UserInputType == Enum.UserInputType.Keyboard then
 								Keybind.Value = input.KeyCode
 								KeyBtn.Text = input.KeyCode.Name:sub(1, 3):upper()
@@ -1669,7 +1668,6 @@ function Yerba:CreateWindow(title, subtitle, options)
 
 					UserInputService.InputBegan:Connect(function(input, gpe)
 						if gpe then return end
-						if binding then return end
 						if Keybind.Value and input.KeyCode == Keybind.Value then
 							if Keybind.Mode == "toggle" then
 								-- Toggle.Value = not Toggle.Value -- im dumb lmao
