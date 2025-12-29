@@ -1652,10 +1652,12 @@ function Yerba:CreateWindow(title, subtitle, options)
 							if input.UserInputType == Enum.UserInputType.Keyboard then
 								Keybind.Value = input.KeyCode
 								KeyBtn.Text = input.KeyCode.Name:sub(1, 3):upper()
-								binding = false
 								conn:Disconnect()
 								Tween(KeyStroke, {Color = Theme.AccentBlue}, 0.1)
 								keybindCallback(input.KeyCode)
+						        task.delay(0.1, function()
+						            binding = false
+						        end)
 							end
 						end)
 					end)
