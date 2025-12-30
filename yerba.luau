@@ -1695,7 +1695,7 @@ function Yerba:CreateWindow(title, subtitle, options)
 							Keybind.Pressed = false
                             
                             if Keybind.Mode == "hold" then
-								Toggle.Value = false
+								-- Toggle.Value = false -- im stupid
 								UpdateToggle()
 							end
 						end
